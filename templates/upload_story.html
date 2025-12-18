@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Upload User Story - AI_CRDC_HUB{% endblock %}
+
+{% block content %}
+<div class="upload-container">
+    <h2>Upload User Story</h2>
+    <p class="subtitle">Upload or paste your user story to generate test cases</p>
+
+    <div class="upload-options">
+        <div class="upload-section">
+            <h3>Option 1: Upload File</h3>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="file-upload">
+                    <input type="file" id="storyFile" name="file" accept=".txt,.md,.text">
+                    <label for="storyFile" class="file-label">Choose File</label>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload & Generate</button>
+            </form>
+        </div>
+
+        <div class="divider">OR</div>
+
+        <div class="upload-section">
+            <h3>Option 2: Paste Story</h3>
+            <form id="pasteForm">
+                <textarea 
+                    id="storyText" 
+                    name="story" 
+                    rows="15" 
+                    placeholder="Paste your user story here...
+
+Example:
+As a user, I want to login to the application
+So that I can access my dashboard
+
+Acceptance Criteria:
+- User can enter username and password
+- User can click login button
+- User sees dashboard after successful login"
+                ></textarea>
+                <button type="submit" class="btn btn-primary">Generate Test Cases</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="loadingIndicator" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Generating test cases... This may take a moment.</p>
+    </div>
+
+    <div id="errorMessage" class="error-message" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    const fileInput = document.getElementById('storyFile');
+    
+    if (!fileInput.files[0]) {
+        showError('Please select a file');
+        return;
+    }
+    
+    formData.append('file', fileInput.files[0]);
+    await uploadStory(formData);
+});
+
+document.getElementById('pasteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const storyText = document.getElementById('storyText').value.trim();
+    
+    if (!storyText) {
+        showError('Please enter a user story');
+        return;
+    }
+    
+    await uploadStory({ story: storyText });
+});
+
+async function uploadStory(data) {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    loadingIndicator.style.display = 'block';
+    errorMessage.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/stories', {
+            method: 'POST',
+            body: data instanceof FormData ? data : JSON.stringify(data),
+            headers: data instanceof FormData ? {} : { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            // Redirect to test cases page with execution_id
+            window.location.href = `/test-cases?execution_id=${result.execution_id || ''}`;
+        } else {
+            showError(result.error || 'Failed to upload story');
+        }
+    } catch (error) {
+        showError('Error uploading story: ' + error.message);
+    } finally {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+function showError(message) {
+    const errorMessage = document.getElementById('errorMessage');
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Select Test Cases - AI_CRDC_HUB{% endblock %}
+
+{% block content %}
+<div class="test-cases-container">
+    <h2>Select Test Cases to Run</h2>
+    <p class="subtitle">Review and select which test cases you want to execute</p>
+
+    <div class="controls">
+        <button id="selectAllBtn" class="btn btn-secondary">Select All</button>
+        <button id="deselectAllBtn" class="btn btn-secondary">Deselect All</button>
+        <span id="selectedCount" class="selected-count">0 selected</span>
+    </div>
+
+    <div id="testCasesList" class="test-cases-list">
+        <div class="loading">Loading test cases...</div>
+    </div>
+
+    <div class="actions">
+        <button id="runTestsBtn" class="btn btn-primary" disabled>Run Selected Tests</button>
+    </div>
+
+    <div id="errorMessage" class="error-message" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const executionId = urlParams.get('execution_id') || localStorage.getItem('current_execution_id');
+
+let testCases = [];
+let selectedIds = new Set();
+
+// Load test cases on page load
+if (executionId) {
+    loadTestCases(executionId);
+} else {
+    document.getElementById('testCasesList').innerHTML = 
+        '<div class="error-message">No execution ID found. Please upload a story first.</div>';
+}
+
+async function loadTestCases(execId) {
+    try {
+        const response = await fetch(`/api/test-cases/${execId}`);
+        const data = await response.json();
+        
+        if (response.ok) {
+            testCases = data.test_cases || [];
+            renderTestCases();
+        } else {
+            showError(data.error || 'Failed to load test cases');
+        }
+    } catch (error) {
+        showError('Error loading test cases: ' + error.message);
+    }
+}
+
+function renderTestCases() {
+    const container = document.getElementById('testCasesList');
+    
+    if (testCases.length === 0) {
+        container.innerHTML = '<div class="error-message">No test cases found</div>';
+        return;
+    }
+    
+    container.innerHTML = testCases.map(tc => `
+        <div class="test-case-card" data-id="${tc.id}">
+            <div class="test-case-header">
+                <input type="checkbox" class="test-case-checkbox" value="${tc.id}" 
+                       onchange="toggleSelection('${tc.id}', this.checked)">
+                <h3>${tc.id}: ${tc.name || 'Unnamed Test'}</h3>
+                <span class="priority-badge priority-${(tc.priority || 'Medium').toLowerCase()}">
+                    ${tc.priority || 'Medium'}
+                </span>
+            </div>
+            <p class="test-case-description">${tc.description || ''}</p>
+            <div class="test-case-steps">
+                <strong>Steps:</strong>
+                <ol>
+                    ${(tc.steps || []).map(step => `<li>${step}</li>`).join('')}
+                </ol>
+            </div>
+            <div class="test-case-expected">
+                <strong>Expected Result:</strong> ${tc.expected_result || 'N/A'}
+            </div>
+        </div>
+    `).join('');
+}
+
+function toggleSelection(id, checked) {
+    if (checked) {
+        selectedIds.add(id);
+    } else {
+        selectedIds.delete(id);
+    }
+    updateSelectedCount();
+    updateRunButton();
+}
+
+function updateSelectedCount() {
+    const count = selectedIds.size;
+    document.getElementById('selectedCount').textContent = `${count} selected`;
+}
+
+function updateRunButton() {
+    const btn = document.getElementById('runTestsBtn');
+    btn.disabled = selectedIds.size === 0;
+}
+
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('.test-case-checkbox').forEach(cb => {
+        cb.checked = true;
+        selectedIds.add(cb.value);
+    });
+    updateSelectedCount();
+    updateRunButton();
+});
+
+document.getElementById('deselectAllBtn').addEventListener('click', () => {
+    document.querySelectorAll('.test-case-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    selectedIds.clear();
+    updateSelectedCount();
+    updateRunButton();
+});
+
+document.getElementById('runTestsBtn').addEventListener('click', async () => {
+    if (selectedIds.size === 0) return;
+    
+    try {
+        // Save selection
+        const selectResponse = await fetch('/api/test-cases/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                execution_id: executionId,
+                selected_ids: Array.from(selectedIds)
+            })
+        });
+        
+        if (!selectResponse.ok) {
+            throw new Error('Failed to save selection');
+        }
+        
+        // Start execution
+        const execResponse = await fetch('/api/executions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ execution_id: executionId })
+        });
+        
+        const result = await execResponse.json();
+        
+        if (execResponse.ok) {
+            // Redirect to progress page
+            window.location.href = `/progress?execution_id=${executionId}`;
+        } else {
+            showError(result.error || 'Failed to start execution');
+        }
+    } catch (error) {
+        showError('Error starting execution: ' + error.message);
+    }
+});
+
+function showError(message) {
+    const errorMessage = document.getElementById('errorMessage');
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+}
+</script>
+{% endblock %}
+

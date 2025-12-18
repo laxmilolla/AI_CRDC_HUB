@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Test Results - AI_CRDC_HUB{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <h2>Test Execution Results</h2>
+    
+    <div id="summary" class="summary-section">
+        <!-- Summary will be loaded here -->
+    </div>
+
+    <div id="testResults" class="test-results-section">
+        <!-- Test results will be loaded here -->
+    </div>
+
+    <div id="analysis" class="analysis-section">
+        <!-- LLM analysis will be loaded here -->
+    </div>
+
+    <div class="actions">
+        <button id="downloadReportBtn" class="btn btn-primary">Download Report</button>
+        <button id="downloadScreenshotsBtn" class="btn btn-secondary">Download Screenshots</button>
+        <button id="runAgainBtn" class="btn btn-secondary">Run Again</button>
+    </div>
+</div>
+
+<!-- Screenshot Modal -->
+<div id="screenshotModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <img id="modalImage" src="" alt="Screenshot">
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const executionId = urlParams.get('execution_id') || localStorage.getItem('current_execution_id');
+
+if (executionId) {
+    loadResults(executionId);
+} else {
+    document.getElementById('summary').innerHTML = 
+        '<div class="error-message">No execution ID found</div>';
+}
+
+async function loadResults(execId) {
+    try {
+        // Load results
+        const resultsResponse = await fetch(`/api/executions/${execId}/results`);
+        const resultsData = await resultsResponse.json();
+        
+        if (resultsResponse.ok) {
+            displayResults(resultsData.results, resultsData.summary);
+        }
+        
+        // Load report/analysis
+        const reportResponse = await fetch(`/api/reports/${execId}`);
+        if (reportResponse.ok) {
+            const reportData = await reportResponse.json();
+            displayAnalysis(reportData.analysis);
+        }
+    } catch (error) {
+        console.error('Error loading results:', error);
+    }
+}
+
+function displayResults(results, summary) {
+    // Display summary
+    document.getElementById('summary').innerHTML = `
+        <div class="summary-card">
+            <h3>Summary</h3>
+            <div class="summary-stats">
+                <div class="stat">
+                    <span class="stat-label">Total:</span>
+                    <span class="stat-value">${summary.total || 0}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Passed:</span>
+                    <span class="stat-value passed">${summary.passed || 0}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Failed:</span>
+                    <span class="stat-value failed">${summary.failed || 0}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Duration:</span>
+                    <span class="stat-value">${summary.duration || 0}s</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Display test results
+    const testResults = results.test_results || [];
+    document.getElementById('testResults').innerHTML = testResults.map(tr => `
+        <div class="test-result-card ${tr.status}">
+            <div class="test-result-header">
+                <h3>${tr.test_case_id || 'Unknown'}</h3>
+                <span class="status-badge ${tr.status}">${tr.status.toUpperCase()}</span>
+            </div>
+            <div class="test-result-steps">
+                ${(tr.steps || []).map((step, idx) => `
+                    <div class="step-result">
+                        <span class="step-status ${step.status}">${step.status === 'passed' ? '✓' : '✗'}</span>
+                        <span class="step-description">Step ${step.step_number}: ${step.description}</span>
+                        ${step.screenshot ? `
+                            <button class="btn-screenshot" onclick="showScreenshot('${step.screenshot}')">📸</button>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+            ${tr.error ? `<div class="error-detail">Error: ${tr.error}</div>` : ''}
+        </div>
+    `).join('');
+}
+
+function displayAnalysis(analysis) {
+    if (!analysis) return;
+    
+    document.getElementById('analysis').innerHTML = `
+        <div class="analysis-card">
+            <h3>AI Analysis</h3>
+            <div class="insights">${analysis.overall_insights || 'No insights available'}</div>
+            ${analysis.recommendations && analysis.recommendations.length > 0 ? `
+                <div class="recommendations">
+                    <h4>Recommendations:</h4>
+                    <ul>
+                        ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function showScreenshot(screenshotPath) {
+    const modal = document.getElementById('screenshotModal');
+    const img = document.getElementById('modalImage');
+    img.src = `/api/screenshots/${screenshotPath}`;
+    modal.style.display = 'block';
+}
+
+// Close modal
+document.querySelector('.close').addEventListener('click', () => {
+    document.getElementById('screenshotModal').style.display = 'none';
+});
+
+document.getElementById('downloadReportBtn').addEventListener('click', () => {
+    window.location.href = `/api/reports/${executionId}/download`;
+});
+
+document.getElementById('downloadScreenshotsBtn').addEventListener('click', () => {
+    window.location.href = `/api/screenshots/${executionId}/download`;
+});
+
+document.getElementById('runAgainBtn').addEventListener('click', () => {
+    window.location.href = '/';
+});
+</script>
+{% endblock %}
+

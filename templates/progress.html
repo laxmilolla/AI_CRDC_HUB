@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Execution Progress - AI_CRDC_HUB{% endblock %}
+
+{% block content %}
+<div class="progress-container">
+    <h2>Test Execution Progress</h2>
+    
+    <div id="executionInfo" class="execution-info">
+        <p><strong>Execution ID:</strong> <span id="executionId">-</span></p>
+        <p><strong>Status:</strong> <span id="executionStatus">-</span></p>
+    </div>
+
+    <div class="progress-section">
+        <h3>Overall Progress</h3>
+        <div class="progress-bar">
+            <div id="overallProgress" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <p id="progressText" class="progress-text">0%</p>
+    </div>
+
+    <div id="testProgressList" class="test-progress-list">
+        <!-- Individual test progress will be shown here -->
+    </div>
+
+    <div id="logsSection" class="logs-section" style="display: none;">
+        <h3>Execution Logs</h3>
+        <div id="logs" class="logs"></div>
+    </div>
+
+    <div class="actions">
+        <button id="refreshBtn" class="btn btn-secondary">Refresh</button>
+        <button id="viewResultsBtn" class="btn btn-primary" style="display: none;">View Results</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const executionId = urlParams.get('execution_id') || localStorage.getItem('current_execution_id');
+
+if (executionId) {
+    document.getElementById('executionId').textContent = executionId;
+    localStorage.setItem('current_execution_id', executionId);
+    startMonitoring();
+} else {
+    document.getElementById('executionInfo').innerHTML = 
+        '<div class="error-message">No execution ID found</div>';
+}
+
+let monitoringInterval;
+
+function startMonitoring() {
+    checkStatus();
+    monitoringInterval = setInterval(checkStatus, 2000); // Check every 2 seconds
+}
+
+function stopMonitoring() {
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+    }
+}
+
+async function checkStatus() {
+    try {
+        const response = await fetch(`/api/executions/${executionId}/status`);
+        const status = await response.json();
+        
+        if (response.ok) {
+            updateProgress(status);
+            
+            if (status.status === 'completed' || status.status === 'failed') {
+                stopMonitoring();
+                document.getElementById('viewResultsBtn').style.display = 'block';
+                if (status.status === 'completed') {
+                    // Auto-redirect to results after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = `/results?execution_id=${executionId}`;
+                    }, 2000);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error checking status:', error);
+    }
+}
+
+function updateProgress(status) {
+    document.getElementById('executionStatus').textContent = status.status;
+    const progress = status.progress || 0;
+    
+    document.getElementById('overallProgress').style.width = `${progress}%`;
+    document.getElementById('progressText').textContent = `${progress}%`;
+}
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+    checkStatus();
+});
+
+document.getElementById('viewResultsBtn').addEventListener('click', () => {
+    window.location.href = `/results?execution_id=${executionId}`;
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    stopMonitoring();
+});
+</script>
+{% endblock %}
+
