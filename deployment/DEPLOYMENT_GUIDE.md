@@ -45,7 +45,9 @@ This will install:
 - Node.js
 - Playwright and browsers
 - AWS CLI
-- System dependencies
+- System dependencies (including xvfb for headless display)
+- ExecuteAutomation MCP Playwright server
+- MCP Bridge dependencies
 - Create project structure
 
 ## Step 3: Configure Environment Variables
@@ -87,7 +89,40 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Step 5: Set Up Systemd Service
+## Step 5: Set Up MCP Bridge Service
+
+The MCP Bridge is a Node.js service that connects to the ExecuteAutomation MCP Playwright server.
+
+```bash
+# Install MCP Bridge dependencies
+cd /opt/AI_CRDC_HUB/mcp-bridge
+npm install
+
+# Copy MCP bridge service file
+sudo cp /opt/AI_CRDC_HUB/deployment/mcp-bridge.service /etc/systemd/system/
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Enable MCP bridge service to start on boot
+sudo systemctl enable mcp-bridge
+
+# Start MCP bridge service
+sudo systemctl start mcp-bridge
+
+# Check status
+sudo systemctl status mcp-bridge
+
+# View logs
+sudo journalctl -u mcp-bridge -f
+```
+
+The MCP bridge runs on port 3001 by default. Verify it's working:
+```bash
+curl http://localhost:3001/health
+```
+
+## Step 6: Set Up Main Application Service
 
 ```bash
 # Copy service file
@@ -109,7 +144,9 @@ sudo systemctl status ai-crdc-hub
 sudo journalctl -u ai-crdc-hub -f
 ```
 
-## Step 6: Configure IAM Role (if needed)
+**Note**: The main application depends on the MCP bridge service. Make sure the MCP bridge is running before starting the main application.
+
+## Step 7: Configure IAM Role (if needed)
 
 If the EC2 instance doesn't have an IAM role with Bedrock permissions:
 
@@ -131,7 +168,7 @@ If the EC2 instance doesn't have an IAM role with Bedrock permissions:
    }
    ```
 
-## Step 7: Verify Deployment
+## Step 8: Verify Deployment
 
 1. Check if service is running:
    ```bash
@@ -143,10 +180,16 @@ If the EC2 instance doesn't have an IAM role with Bedrock permissions:
    curl http://localhost:5000
    ```
 
-3. Access web UI:
+3. Check MCP bridge is running:
+   ```bash
+   curl http://localhost:3001/health
+   sudo systemctl status mcp-bridge
+   ```
+
+4. Access web UI:
    - Open browser: `http://3.221.24.93:5000`
 
-## Step 8: Firewall Configuration
+## Step 9: Firewall Configuration
 
 Ensure security group allows:
 - Port 22 (SSH) - Already open
