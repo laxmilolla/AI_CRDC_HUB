@@ -157,9 +157,14 @@ todos:
     status: pending
     dependencies:
       - enhance-error-handling
+  - id: setup-ec2-infrastructure
+    content: Create EC2 instance (t3.large recommended): Ubuntu 22.04, configure security groups (SSH, HTTP, HTTPS), attach IAM role with Bedrock permissions, set up SSH access. Document instance details and connection info.
+    status: pending
   - id: create-deployment-scripts
     content: Create deployment/install_dependencies.sh and deployment/app.service for EC2 deployment
     status: pending
+    dependencies:
+      - setup-ec2-infrastructure
   - id: complete-documentation
     content: Update README.md with setup instructions, API documentation, deployment guide, and troubleshooting
     status: pending
@@ -620,9 +625,32 @@ Create and run tests:
 - `tests/test_api.py`
 - `tests/test_integrations.py`
 
-## Phase 7: Deployment Preparation (Steps 27-29)
+## Phase 7: Deployment Preparation (Steps 27-30)
 
-### Step 27: Deployment Scripts
+### Step 27: EC2 Infrastructure Setup
+
+EC2 instance is ready and configured:
+
+- **Instance ID**: `i-0bb2e7c8d94a69d3b`
+- **Instance Name**: `AI_CRDC_HUB`
+- **Instance Type**: `t3.small` (2 vCPU, 2GB RAM) - upgraded from t3.micro
+- **Static IP (Elastic IP)**: `3.221.24.93`
+- **Elastic IP Allocation ID**: `eipalloc-0f01e70812f8a398e`
+- **Region**: `us-east-1`
+- **State**: Running
+- **SSH Key**: `mcp-playwright-key-final`
+- **Security Group**: Ports 22, 80, 443, 8080, 3000, 3001, 4000, 4001, 4002 open
+- **Instance is clean/unused** - ready for fresh setup
+
+**Next Steps:**
+- Verify IAM role has Bedrock permissions (if not, attach role with `bedrock:InvokeModel`)
+- SSH into instance and prepare for application deployment
+- Run deployment scripts to install dependencies
+
+**Files created:**
+- `deployment/EC2_CREDENTIALS.md` - Contains all EC2 access details
+
+### Step 28: Deployment Scripts
 
 Create deployment automation:
 
@@ -636,7 +664,7 @@ Create deployment automation:
 - `deployment/install_dependencies.sh`
 - `deployment/app.service`
 
-### Step 28: Documentation
+### Step 29: Documentation
 
 Complete project documentation:
 
@@ -650,7 +678,7 @@ Complete project documentation:
 
 - `README.md`
 
-### Step 29: Final Configuration
+### Step 30: Final Configuration
 
 Prepare for deployment:
 
@@ -673,7 +701,7 @@ Prepare for deployment:
 4. **Backend API** (Steps 14-18): All REST endpoints
 5. **Frontend** (Steps 19-23): All UI pages
 6. **Integration** (Steps 24-26): End-to-end testing and error handling
-7. **Deployment** (Steps 27-29): Deployment scripts and documentation
+7. **Deployment** (Steps 27-30): EC2 infrastructure, deployment scripts, and documentation
 
 ## Key Features
 
