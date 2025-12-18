@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Data and generated files
+data/
+generated_tests/
+screenshots/
+reports/
+
+# Node modules (if any)
+node_modules/
+
+# Playwright
+playwright-report/
+test-results/
+
+# AWS
+.aws/
+
+# Temporary files
+*.tmp
+*.bak
+
