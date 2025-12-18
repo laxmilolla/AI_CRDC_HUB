@@ -25,6 +25,11 @@ class ExecutionManager:
         test_cases: list[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
+        Execute Playwright tests
+        
+        Note: This will be integrated with MCP Playwright client
+        """
+        """
         Execute Playwright tests via MCP
         
         Args:
