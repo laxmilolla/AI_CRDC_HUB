@@ -37,7 +37,7 @@ sudo apt install -y \
     libxfixes3 \
     libxrandr2 \
     libgbm1 \
-    libasound2 \
+    libasound2t64 \
     libpango-1.0-0 \
     libcairo2
 
