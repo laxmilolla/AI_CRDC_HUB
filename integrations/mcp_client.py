@@ -1,7 +1,9 @@
 """
 MCP Playwright client using ExecuteAutomation's MCP Playwright server
+Uses Node.js bridge service for reliable connection
 """
 import os
+import requests
 from typing import Optional, Dict, Any
 from utils.logger import get_logger
 
@@ -10,171 +12,144 @@ class MCPPlaywrightClient:
     """
     Client for ExecuteAutomation MCP Playwright
     
-    This integrates with @executeautomation/playwright-mcp-server.
-    Uses xvfb-run for headless display support.
+    This integrates with @executeautomation/playwright-mcp-server via Node.js bridge.
+    The bridge service runs on localhost:3001 by default.
     """
     
-    def __init__(self, mcp_server_path: str = None):
+    def __init__(self, mcp_server_path: str = None, bridge_url: str = None):
         """
         Initialize MCP Playwright client
         
         Args:
-            mcp_server_path: Path to MCP Playwright server (if custom)
+            mcp_server_path: Path to MCP Playwright server (deprecated, using bridge)
+            bridge_url: URL of the MCP bridge service (default: http://localhost:3001)
         """
         self.logger = get_logger(__name__)
-        self.mcp_server_path = mcp_server_path or os.getenv("MCP_SERVER_PATH")
+        self.bridge_url = bridge_url or os.getenv("MCP_BRIDGE_URL", "http://localhost:3001")
         self.connected = False
-        self.transport_context = None
-        self.session = None
-        
-        # MCP Playwright uses stdio or HTTP transport
-        # We'll use the MCP SDK to connect
-        try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
-            self.mcp_available = True
-        except ImportError:
-            self.logger.warning("MCP SDK not installed. Install with: pip install mcp")
-            self.mcp_available = False
     
     async def connect_mcp_server(self):
         """
-        Connect to ExecuteAutomation MCP Playwright server
+        Connect to ExecuteAutomation MCP Playwright server via Node.js bridge
         
-        The MCP server should be running via:
-        - xvfb-run -a npx @executeautomation/playwright-mcp-server
-        - Package: https://www.npmjs.com/package/@executeautomation/playwright-mcp-server
+        The bridge service should be running (see mcp-bridge/server.js)
         """
-        if not self.mcp_available:
-            raise RuntimeError("MCP SDK not available. Install with: pip install mcp")
-        
         if self.connected:
             return
         
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
-            
-            # ExecuteAutomation MCP Playwright server command
-            # Uses xvfb-run for headless display support (like agent_llm instance)
-            # Package: @executeautomation/playwright-mcp-server
-            server_params = StdioServerParameters(
-                command="xvfb-run",
-                args=["-a", "npx", "@executeautomation/playwright-mcp-server"]
-            )
-            
-            # stdio_client returns an async context manager
-            # We need to enter it and keep it alive
-            self.logger.info("Creating MCP transport connection...")
-            self.transport_context = stdio_client(server_params)
-            
-            self.logger.info("Entering transport context...")
-            read_stream, write_stream = await self.transport_context.__aenter__()
-            self.logger.info("Transport context entered, creating session...")
-            
-            self.session = ClientSession(read_stream, write_stream)
-            self.logger.info("Initializing MCP session...")
-            # Add timeout for initialization
             import asyncio
-            await asyncio.wait_for(self.session.initialize(), timeout=10.0)
+            import aiohttp
+            
+            self.logger.info(f"Connecting to MCP bridge at {self.bridge_url}...")
+            
+            # Check if bridge is running
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(f"{self.bridge_url}/health", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                        if resp.status != 200:
+                            raise RuntimeError(f"MCP bridge health check failed: {resp.status}")
+                except aiohttp.ClientError as e:
+                    raise RuntimeError(f"Cannot reach MCP bridge at {self.bridge_url}. Is it running? Error: {e}")
+            
+            # Connect via bridge
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{self.bridge_url}/connect", timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise RuntimeError(f"MCP bridge connection failed: {error_text}")
+                    
+                    result = await resp.json()
+                    if not result.get('success'):
+                        raise RuntimeError(f"MCP connection failed: {result.get('error', 'Unknown error')}")
             
             self.connected = True
-            self.logger.info("Connected to ExecuteAutomation MCP Playwright server")
+            self.logger.info("Connected to ExecuteAutomation MCP Playwright server via bridge")
             
-        except asyncio.TimeoutError:
-            error_msg = "MCP server initialization timeout - server may not be responding"
-            self.logger.error(error_msg)
-            if self.transport_context:
-                try:
-                    await self.transport_context.__aexit__(None, None, None)
-                except:
-                    pass
-            raise RuntimeError(error_msg)
         except Exception as e:
             self.logger.error(f"Failed to connect to MCP Playwright server: {e}")
             import traceback
             self.logger.error(traceback.format_exc())
-            if self.transport_context:
-                try:
-                    await self.transport_context.__aexit__(None, None, None)
-                except:
-                    pass
             raise
     
-    async def navigate(self, url: str) -> str:
-        """Navigate to URL via MCP"""
+    async def _call_bridge(self, endpoint: str, data: dict = None) -> dict:
+        """Call MCP bridge HTTP endpoint"""
         if not self.connected:
             await self.connect_mcp_server()
         
-        result = await self.session.call_tool(
-            "browser_navigate",
-            arguments={"url": url}
-        )
-        return result.get("content", [{}])[0].get("text", f"Navigated to {url}")
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.bridge_url}/{endpoint}",
+                json=data or {},
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    raise RuntimeError(f"Bridge call failed ({endpoint}): {error_text}")
+                return await resp.json()
+    
+    async def navigate(self, url: str) -> str:
+        """Navigate to URL via MCP bridge"""
+        result = await self._call_bridge("navigate", {"url": url})
+        if result.get("success"):
+            return f"Navigated to {url}"
+        else:
+            raise RuntimeError(result.get("error", "Navigation failed"))
     
     async def click(self, selector: str) -> str:
-        """Click element via MCP - uses browser_snapshot first to get element ref"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        # First get page snapshot to find element
-        snapshot = await self.session.call_tool("browser_snapshot", arguments={})
-        # Then click using element ref (simplified - would need proper element selection)
-        result = await self.session.call_tool(
-            "browser_click",
-            arguments={"element": selector, "ref": selector}
-        )
-        return result.get("content", [{}])[0].get("text", f"Clicked {selector}")
+        """Click element via MCP bridge"""
+        result = await self._call_bridge("click", {"selector": selector})
+        if result.get("success"):
+            return f"Clicked {selector}"
+        else:
+            raise RuntimeError(result.get("error", "Click failed"))
     
     async def fill(self, selector: str, text: str) -> str:
-        """Fill input via MCP"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        result = await self.session.call_tool(
-            "browser_type",
-            arguments={"element": selector, "ref": selector, "text": text}
-        )
-        return result.get("content", [{}])[0].get("text", f"Filled {selector}")
+        """Fill input via MCP bridge"""
+        result = await self._call_bridge("fill", {"selector": selector, "text": text})
+        if result.get("success"):
+            return f"Filled {selector}"
+        else:
+            raise RuntimeError(result.get("error", "Fill failed"))
     
     async def take_screenshot(self, path: str) -> str:
-        """Capture screenshot via MCP"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        result = await self.session.call_tool(
-            "browser_take_screenshot",
-            arguments={"filename": path}
-        )
-        return path
+        """Capture screenshot via MCP bridge"""
+        result = await self._call_bridge("screenshot", {"path": path})
+        if result.get("success"):
+            return path
+        else:
+            raise RuntimeError(result.get("error", "Screenshot failed"))
     
     async def get_text(self, selector: str) -> str:
-        """Get element text via MCP"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        # Use browser_snapshot to get text
-        result = await self.session.call_tool("browser_snapshot", arguments={})
-        return result.get("content", [{}])[0].get("text", "")
+        """Get element text via MCP bridge"""
+        result = await self._call_bridge("get_text", {"selector": selector})
+        if result.get("success"):
+            content = result.get("content", [])
+            if content and len(content) > 0:
+                return content[0].get("text", "")
+            return ""
+        else:
+            raise RuntimeError(result.get("error", "Get text failed"))
     
     async def get_dom(self) -> str:
-        """Get page DOM via MCP"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        result = await self.session.call_tool("browser_snapshot", arguments={})
-        return result.get("content", [{}])[0].get("text", "")
+        """Get page DOM via MCP bridge"""
+        result = await self._call_bridge("snapshot", {})
+        if result.get("success"):
+            content = result.get("content", [])
+            if content and len(content) > 0:
+                return content[0].get("text", "")
+            return ""
+        else:
+            raise RuntimeError(result.get("error", "Get DOM failed"))
     
     async def wait_for(self, selector: str, timeout: int = 30000) -> str:
-        """Wait for element via MCP"""
-        if not self.connected:
-            await self.connect_mcp_server()
-        
-        result = await self.session.call_tool(
-            "browser_wait_for",
-            arguments={"text": selector, "time": timeout / 1000}
-        )
-        return result.get("content", [{}])[0].get("text", f"Element {selector} appeared")
+        """Wait for element via MCP bridge"""
+        result = await self._call_bridge("wait_for", {"selector": selector, "timeout": timeout})
+        if result.get("success"):
+            return f"Element {selector} appeared"
+        else:
+            raise RuntimeError(result.get("error", "Wait for failed"))
     
     async def execute_step(
         self,
@@ -235,20 +210,19 @@ class MCPPlaywrightClient:
             }
     
     async def close(self):
-        """Close MCP connection"""
-        if self.session:
+        """Close MCP connection via bridge"""
+        if self.connected:
             try:
-                await self.session.close()
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.bridge_url}/disconnect",
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    ) as resp:
+                        # Ignore errors on disconnect
+                        pass
             except:
                 pass
-            self.session = None
-        
-        if self.transport_context:
-            try:
-                await self.transport_context.__aexit__(None, None, None)
-            except:
-                pass
-            self.transport_context = None
         
         self.connected = False
         self.logger.info("MCP Playwright connection closed")

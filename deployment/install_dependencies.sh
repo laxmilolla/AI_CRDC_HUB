@@ -51,6 +51,14 @@ sudo npx playwright install --with-deps chromium
 echo "Step 5a: Installing ExecuteAutomation MCP Playwright server..."
 sudo npm install -g @executeautomation/playwright-mcp-server
 
+# Install MCP Bridge dependencies
+echo "Step 5b: Installing MCP Bridge dependencies..."
+if [ -d "$PROJECT_DIR/mcp-bridge" ]; then
+    cd $PROJECT_DIR/mcp-bridge
+    npm install
+    cd $PROJECT_DIR
+fi
+
 # Install AWS CLI (for Bedrock access)
 echo "Step 6: Installing AWS CLI..."
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"

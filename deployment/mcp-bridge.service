@@ -1,0 +1,19 @@
+[Unit]
+Description=MCP Bridge Service for ExecuteAutomation Playwright MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/AI_CRDC_HUB/mcp-bridge
+Environment="NODE_ENV=production"
+Environment="MCP_BRIDGE_PORT=3001"
+ExecStart=/usr/bin/node /opt/AI_CRDC_HUB/mcp-bridge/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

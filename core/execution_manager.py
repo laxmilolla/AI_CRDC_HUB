@@ -52,11 +52,18 @@ class ExecutionManager:
             # Save execution status
             self._save_execution_status(execution_id)
             
-            # Execute via MCP Playwright
-            # Run async execution
-            results = asyncio.run(
-                self._execute_with_mcp(playwright_code, execution_id, test_cases)
-            )
+            # Try MCP first, fallback to direct Playwright execution
+            try:
+                self.logger.info("Attempting execution via MCP...")
+                results = asyncio.run(
+                    self._execute_with_mcp(playwright_code, execution_id, test_cases)
+                )
+            except (RuntimeError, asyncio.TimeoutError) as e:
+                if "timeout" in str(e).lower() or "MCP" in str(e):
+                    self.logger.warning(f"MCP execution failed: {e}. Falling back to direct Playwright execution...")
+                    results = self._execute_with_playwright(playwright_code, execution_id, test_cases)
+                else:
+                    raise
             
             # Update execution status
             self.executions[execution_id].update({
@@ -272,6 +279,116 @@ class ExecutionManager:
                 "completed_at": time.time()
             })
             self._save_execution_status(execution_id)
+    
+    def _execute_with_playwright(
+        self,
+        playwright_code: str,
+        execution_id: str,
+        test_cases: list[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Execute tests directly using Playwright (fallback when MCP fails)
+        
+        Args:
+            playwright_code: Playwright JavaScript code
+            execution_id: Execution identifier
+            test_cases: List of test cases
+        
+        Returns:
+            Execution results
+        """
+        import subprocess
+        import os
+        
+        self.logger.info("Executing Playwright tests directly...")
+        
+        # Save the test file
+        test_file = Path("generated_tests") / f"execution_{execution_id}" / "test.spec.js"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text(playwright_code, encoding='utf-8')
+        
+        test_results = []
+        start_time = time.time()
+        
+        try:
+            # Run Playwright tests using npx playwright test
+            self.logger.info(f"Running: npx playwright test {test_file}")
+            
+            # Update progress
+            self.executions[execution_id]['progress'] = 50
+            self._save_execution_status(execution_id)
+            
+            # Set working directory to project root
+            project_root = Path("/opt/AI_CRDC_HUB")
+            
+            # Run the test
+            result = subprocess.run(
+                ["npx", "playwright", "test", str(test_file.relative_to(project_root))],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            # Parse results
+            for idx, test_case in enumerate(test_cases or []):
+                test_case_id = test_case.get('id', f'TC{idx+1:03d}')
+                
+                # Check if screenshots exist for this test case
+                screenshot_dir = Path("screenshots") / f"execution_{execution_id}" / test_case_id
+                screenshots = []
+                if screenshot_dir.exists():
+                    screenshots = sorted(screenshot_dir.glob("*.png"))
+                
+                # Determine status based on exit code and screenshots
+                test_status = "passed" if result.returncode == 0 else "failed"
+                
+                step_results = []
+                for step_idx, screenshot_path in enumerate(screenshots, 1):
+                    step_results.append({
+                        "status": "passed",
+                        "step_number": step_idx,
+                        "screenshot": str(screenshot_path),
+                        "description": screenshot_path.stem
+                    })
+                
+                test_results.append({
+                    "test_case_id": test_case_id,
+                    "status": test_status,
+                    "steps": step_results,
+                    "error": result.stderr if result.returncode != 0 else None,
+                    "duration": time.time() - start_time
+                })
+            
+            # Calculate summary
+            total = len(test_results)
+            passed = sum(1 for r in test_results if r['status'] == 'passed')
+            failed = total - passed
+            duration = time.time() - start_time
+            
+            results = {
+                "execution_id": execution_id,
+                "status": "completed",
+                "test_results": test_results,
+                "duration": duration,
+                "summary": {
+                    "total": total,
+                    "passed": passed,
+                    "failed": failed,
+                    "success_rate": (passed / total * 100) if total > 0 else 0
+                },
+                "stdout": result.stdout,
+                "stderr": result.stderr
+            }
+            
+            self.logger.info(f"Playwright execution completed: {passed}/{total} tests passed")
+            return results
+            
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Playwright test execution timed out after 5 minutes")
+        except Exception as e:
+            self.logger.error(f"Error executing Playwright tests: {e}")
+            raise
     
     def _save_execution_status(self, execution_id: str):
         """Save execution status to file"""
