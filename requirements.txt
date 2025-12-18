@@ -25,3 +25,6 @@ python-json-logger==2.0.7
 # Utilities
 requests==2.31.0
 
+# MCP (Microsoft Model Context Protocol)
+mcp==0.9.0
+

@@ -377,31 +377,37 @@ Implement LLM-driven result analysis:
 
 ### Step 11: MCP Playwright Server
 
-Set up MCP Playwright server for browser control:
+Set up Microsoft's official MCP Playwright server:
 
-- Create `integrations/mcp_server.py` or configure MCP Playwright server
-- Implement browser control functions: navigate, click, fill, screenshot, get_text, wait_for
-- Set up MCP server connection and initialization
-- Handle browser lifecycle (launch, close)
+- Use Microsoft's official MCP Playwright: `@modelcontextprotocol/server-playwright`
+- Install via: `npx @modelcontextprotocol/server-playwright`
+- MCP server provides browser control functions: navigate, click, fill, screenshot, get_text, wait_for
+- No custom server needed - use Microsoft's implementation
+
+**Installation:**
+```bash
+npm install -g @modelcontextprotocol/server-playwright
+# Or use npx: npx @modelcontextprotocol/server-playwright
+```
 
 **Files to create:**
 
-- `integrations/mcp_server.py` (or MCP configuration)
+- None (using Microsoft's MCP Playwright server)
 
 ### Step 12: MCP Client
 
-Implement MCP client for Playwright control:
+Implement MCP client to connect to Microsoft's MCP Playwright:
 
 - Create `integrations/mcp_client.py`
-- Implement `connect_mcp_server()` for connection
-- Implement `execute_step(step_code)` for single step execution
-- Implement `take_screenshot(path)` for screenshot capture
-- Implement `get_dom()` and `navigate(url)` methods
+- Use MCP SDK to connect to Microsoft's MCP Playwright server
+- Implement `connect_mcp_server()` using MCP SDK
+- Implement methods to call MCP tools: navigate, click, fill, screenshot, get_text, wait_for
 - Integrate with screenshot handler for automatic screenshot saving
+- Add `mcp` package to requirements.txt
 
 **Files to create:**
 
-- `integrations/mcp_client.py`
+- `integrations/mcp_client.py` (uses Microsoft MCP Playwright)
 
 ### Step 13: Screenshot Integration
 
