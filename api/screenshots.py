@@ -65,6 +65,31 @@ def get_screenshot(execution_id, test_case_id, step_number):
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/screenshots/file/<path:filepath>', methods=['GET'])
+def serve_screenshot_file(filepath):
+    """Serve screenshot file directly by path"""
+    try:
+        # Security: ensure path is within screenshots directory
+        screenshot_path = Path('screenshots') / filepath
+        
+        # Prevent directory traversal
+        if not str(screenshot_path.resolve()).startswith(str(Path('screenshots').resolve())):
+            return jsonify({'error': 'Invalid path'}), 403
+        
+        if not screenshot_path.exists():
+            return jsonify({'error': 'Screenshot not found'}), 404
+        
+        return send_file(
+            str(screenshot_path),
+            mimetype='image/png',
+            as_attachment=False
+        )
+        
+    except Exception as e:
+        logger.error(f"Error serving screenshot: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/screenshots/<execution_id>/download', methods=['GET'])
 def download_screenshots(execution_id):
     """Download all screenshots as ZIP"""
