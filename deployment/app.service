@@ -5,10 +5,10 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/opt/AI_CRDCHub
-Environment="PATH=/opt/AI_CRDCHub/venv/bin"
+WorkingDirectory=/opt/AI_CRDC_HUB
+Environment="PATH=/opt/AI_CRDC_HUB/venv/bin"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/opt/AI_CRDCHub/venv/bin/python /opt/AI_CRDCHub/app.py
+ExecStart=/opt/AI_CRDC_HUB/venv/bin/python /opt/AI_CRDC_HUB/app.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
