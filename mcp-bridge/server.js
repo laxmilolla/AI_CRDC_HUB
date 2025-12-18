@@ -170,6 +170,22 @@ app.post('/call_tool', async (req, res) => {
   }
 });
 
+// List available tools
+app.get('/tools', async (req, res) => {
+  try {
+    if (!mcpBridge.connected) {
+      await mcpBridge.connect();
+    }
+    const tools = mcpBridge.getTools();
+    res.json({ success: true, tools: tools.map(t => ({ name: t.name, description: t.description })) });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Disconnect
 app.post('/disconnect', async (req, res) => {
   try {
