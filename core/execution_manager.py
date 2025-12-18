@@ -140,12 +140,13 @@ class ExecutionManager:
                 for step_idx, step_desc in enumerate(steps, 1):
                     try:
                         # Execute step via MCP
+                        # Pass playwright_code to help extract selectors
                         step_result = await mcp_client.execute_step(
-                            step_desc,
-                            execution_id,
-                            test_case_id,
-                            step_idx,
-                            step_desc
+                            step_description=step_desc,
+                            execution_id=execution_id,
+                            test_case_id=test_case_id,
+                            step_number=step_idx,
+                            playwright_code=playwright_code
                         )
                         step_results.append(step_result)
                         
@@ -302,28 +303,29 @@ class ExecutionManager:
         
         self.logger.info("Executing Playwright tests directly...")
         
-        # Save the test file
-        test_file = Path("generated_tests") / f"execution_{execution_id}" / "test.spec.js"
-        test_file.parent.mkdir(parents=True, exist_ok=True)
-        test_file.write_text(playwright_code, encoding='utf-8')
+        # Save the test file using FileHandler to ensure correct path
+        test_file = self.file_handler.save_playwright_code(execution_id, playwright_code)
         
         test_results = []
         start_time = time.time()
         
         try:
+            # Get absolute path and relative path for Playwright command
+            project_root = self.file_handler.base_dir.resolve()
+            # Resolve test_file to absolute path first, then get relative path
+            test_file_absolute = test_file.resolve() if not test_file.is_absolute() else test_file
+            test_file_relative = test_file_absolute.relative_to(project_root)
+            
             # Run Playwright tests using npx playwright test
-            self.logger.info(f"Running: npx playwright test {test_file}")
+            self.logger.info(f"Running: npx playwright test {test_file_relative} (from {project_root})")
             
             # Update progress
             self.executions[execution_id]['progress'] = 50
             self._save_execution_status(execution_id)
             
-            # Set working directory to project root
-            project_root = Path("/opt/AI_CRDC_HUB")
-            
-            # Run the test
+            # Run the test from project root
             result = subprocess.run(
-                ["npx", "playwright", "test", str(test_file.relative_to(project_root))],
+                ["npx", "playwright", "test", str(test_file_relative)],
                 cwd=str(project_root),
                 capture_output=True,
                 text=True,

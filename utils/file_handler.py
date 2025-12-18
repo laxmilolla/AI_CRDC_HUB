@@ -110,4 +110,16 @@ class FileHandler:
         file_path = dir_path / "test.spec.js"
         file_path.write_text(code, encoding='utf-8')
         return file_path
+    
+    def get_playwright_code_path(self, execution_id: str) -> Path:
+        """
+        Get the path to the Playwright test file for an execution
+        
+        Args:
+            execution_id: Execution identifier
+            
+        Returns:
+            Absolute path to the test file
+        """
+        return self.base_dir / "generated_tests" / f"execution_{execution_id}" / "test.spec.js"
 
