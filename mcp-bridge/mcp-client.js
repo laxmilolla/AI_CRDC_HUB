@@ -44,9 +44,10 @@ class MCPPlaywrightBridge {
 
       // List available tools
       const toolsResponse = await this.client.listTools();
-      console.log(`[MCP Bridge] Available tools: ${toolsResponse.tools.length}`);
+      this.tools = toolsResponse.tools;
+      console.log(`[MCP Bridge] Available tools: ${this.tools.length}`);
       
-      return { success: true, tools: toolsResponse.tools.length };
+      return { success: true, tools: this.tools.length, toolNames: this.tools.map(t => t.name) };
     } catch (error) {
       console.error('[MCP Bridge] Connection failed:', error);
       this.connected = false;
@@ -106,6 +107,10 @@ class MCPPlaywrightBridge {
     return await this.callTool('snapshot', {});
   }
 
+  getTools() {
+    return this.tools || [];
+  }
+
   async disconnect() {
     if (this.client) {
       try {
@@ -116,6 +121,7 @@ class MCPPlaywrightBridge {
       this.client = null;
     }
     this.connected = false;
+    this.tools = null;
     console.log('[MCP Bridge] Disconnected');
   }
 }
