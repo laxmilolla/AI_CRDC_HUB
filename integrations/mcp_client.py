@@ -24,6 +24,8 @@ class MCPPlaywrightClient:
         self.logger = get_logger(__name__)
         self.mcp_server_path = mcp_server_path or os.getenv("MCP_SERVER_PATH")
         self.connected = False
+        self.transport_context = None
+        self.session = None
         
         # MCP Playwright uses stdio or HTTP transport
         # We'll use the MCP SDK to connect
@@ -46,6 +48,9 @@ class MCPPlaywrightClient:
         if not self.mcp_available:
             raise RuntimeError("MCP SDK not available. Install with: pip install mcp")
         
+        if self.connected:
+            return
+        
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
@@ -58,8 +63,12 @@ class MCPPlaywrightClient:
                 args=["-y", "@playwright/mcp"]
             )
             
-            stdio_transport = await stdio_client(server_params)
-            self.session = ClientSession(stdio_transport[0], stdio_transport[1])
+            # stdio_client returns an async context manager
+            # We need to enter it and keep it alive
+            self.transport_context = stdio_client(server_params)
+            read_stream, write_stream = await self.transport_context.__aenter__()
+            
+            self.session = ClientSession(read_stream, write_stream)
             await self.session.initialize()
             
             self.connected = True
@@ -67,6 +76,11 @@ class MCPPlaywrightClient:
             
         except Exception as e:
             self.logger.error(f"Failed to connect to MCP Playwright server: {e}")
+            if self.transport_context:
+                try:
+                    await self.transport_context.__aexit__(None, None, None)
+                except:
+                    pass
             raise
     
     async def navigate(self, url: str) -> str:
@@ -188,8 +202,20 @@ class MCPPlaywrightClient:
     
     async def close(self):
         """Close MCP connection"""
-        if hasattr(self, 'session') and self.session:
-            await self.session.close()
+        if self.session:
+            try:
+                await self.session.close()
+            except:
+                pass
+            self.session = None
+        
+        if self.transport_context:
+            try:
+                await self.transport_context.__aexit__(None, None, None)
+            except:
+                pass
+            self.transport_context = None
+        
         self.connected = False
         self.logger.info("MCP Playwright connection closed")
 
