@@ -27,17 +27,12 @@ class ExecutionManager:
         test_cases: list[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Execute Playwright tests
-        
-        Note: This will be integrated with MCP Playwright client
-        """
-        """
         Execute Playwright tests via MCP
         
         Args:
-            playwright_code: Playwright JavaScript code
+            playwright_code: Generated Playwright JavaScript code
             execution_id: Execution identifier
-            test_cases: Optional list of test cases being executed
+            test_cases: List of test cases being executed
         
         Returns:
             Execution results dictionary
@@ -57,19 +52,11 @@ class ExecutionManager:
             # Save execution status
             self._save_execution_status(execution_id)
             
-            # Execute via MCP (will be implemented in MCP client)
-            # For now, this is a placeholder
-            results = {
-                "execution_id": execution_id,
-                "status": "completed",
-                "test_results": [],
-                "duration": 0,
-                "summary": {
-                    "total": 0,
-                    "passed": 0,
-                    "failed": 0
-                }
-            }
+            # Execute via MCP Playwright
+            # Run async execution
+            results = asyncio.run(
+                self._execute_with_mcp(playwright_code, execution_id, test_cases)
+            )
             
             # Update execution status
             self.executions[execution_id].update({
@@ -89,9 +76,116 @@ class ExecutionManager:
             self.logger.error(f"Error executing tests: {e}")
             self.executions[execution_id].update({
                 "status": "failed",
-                "error": str(e)
+                "error": str(e),
+                "completed_at": time.time()
             })
+            self._save_execution_status(execution_id)
             raise
+    
+    async def _execute_with_mcp(
+        self,
+        playwright_code: str,
+        execution_id: str,
+        test_cases: list[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Execute tests using MCP Playwright client
+        
+        Args:
+            playwright_code: Playwright JavaScript code
+            execution_id: Execution identifier
+            test_cases: List of test cases
+        
+        Returns:
+            Execution results
+        """
+        mcp_client = MCPPlaywrightClient()
+        screenshot_handler = ScreenshotHandler(execution_id=execution_id)
+        
+        test_results = []
+        start_time = time.time()
+        
+        try:
+            # Connect to MCP
+            await mcp_client.connect_mcp_server()
+            
+            # Execute each test case
+            for idx, test_case in enumerate(test_cases or []):
+                test_case_id = test_case.get('id', f'TC{idx+1:03d}')
+                self.logger.info(f"Executing test case: {test_case_id}")
+                
+                # Update progress
+                progress = int((idx / len(test_cases)) * 100) if test_cases else 0
+                self.executions[execution_id]['progress'] = progress
+                self._save_execution_status(execution_id)
+                
+                # Execute test case steps
+                steps = test_case.get('steps', [])
+                step_results = []
+                test_status = "passed"
+                test_error = None
+                
+                for step_idx, step_desc in enumerate(steps, 1):
+                    try:
+                        # Execute step via MCP
+                        step_result = await mcp_client.execute_step(
+                            step_desc,
+                            execution_id,
+                            test_case_id,
+                            step_idx,
+                            step_desc
+                        )
+                        step_results.append(step_result)
+                        
+                        if step_result.get('status') == 'failed':
+                            test_status = "failed"
+                            test_error = step_result.get('error')
+                            break
+                            
+                    except Exception as e:
+                        self.logger.error(f"Error in step {step_idx}: {e}")
+                        step_results.append({
+                            "status": "failed",
+                            "error": str(e),
+                            "step_number": step_idx,
+                            "description": step_desc
+                        })
+                        test_status = "failed"
+                        test_error = str(e)
+                        break
+                
+                test_results.append({
+                    "test_case_id": test_case_id,
+                    "status": test_status,
+                    "steps": step_results,
+                    "error": test_error,
+                    "duration": time.time() - start_time
+                })
+            
+            # Calculate summary
+            total = len(test_results)
+            passed = sum(1 for r in test_results if r['status'] == 'passed')
+            failed = total - passed
+            duration = time.time() - start_time
+            
+            results = {
+                "execution_id": execution_id,
+                "status": "completed",
+                "test_results": test_results,
+                "duration": duration,
+                "summary": {
+                    "total": total,
+                    "passed": passed,
+                    "failed": failed,
+                    "success_rate": (passed / total * 100) if total > 0 else 0
+                }
+            }
+            
+            return results
+            
+        finally:
+            # Close MCP connection
+            await mcp_client.close()
     
     def monitor_execution(self, execution_id: str) -> Dict[str, Any]:
         """
