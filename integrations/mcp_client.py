@@ -74,13 +74,26 @@ class MCPPlaywrightClient:
             
             self.session = ClientSession(read_stream, write_stream)
             self.logger.info("Initializing MCP session...")
-            await self.session.initialize()
+            # Add timeout for initialization
+            import asyncio
+            await asyncio.wait_for(self.session.initialize(), timeout=10.0)
             
             self.connected = True
             self.logger.info("Connected to Microsoft MCP Playwright server")
             
+        except asyncio.TimeoutError:
+            error_msg = "MCP server initialization timeout - server may not be responding"
+            self.logger.error(error_msg)
+            if self.transport_context:
+                try:
+                    await self.transport_context.__aexit__(None, None, None)
+                except:
+                    pass
+            raise RuntimeError(error_msg)
         except Exception as e:
             self.logger.error(f"Failed to connect to MCP Playwright server: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             if self.transport_context:
                 try:
                     await self.transport_context.__aexit__(None, None, None)
