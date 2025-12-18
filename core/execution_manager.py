@@ -106,8 +106,13 @@ class ExecutionManager:
         start_time = time.time()
         
         try:
-            # Connect to MCP
-            await mcp_client.connect_mcp_server()
+            # Connect to MCP with timeout
+            self.logger.info("Connecting to MCP Playwright server...")
+            try:
+                await asyncio.wait_for(mcp_client.connect_mcp_server(), timeout=30.0)
+                self.logger.info("Successfully connected to MCP Playwright server")
+            except asyncio.TimeoutError:
+                raise RuntimeError("MCP connection timeout after 30 seconds")
             
             # Execute each test case
             for idx, test_case in enumerate(test_cases or []):

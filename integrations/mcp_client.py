@@ -65,10 +65,15 @@ class MCPPlaywrightClient:
             
             # stdio_client returns an async context manager
             # We need to enter it and keep it alive
+            self.logger.info("Creating MCP transport connection...")
             self.transport_context = stdio_client(server_params)
+            
+            self.logger.info("Entering transport context...")
             read_stream, write_stream = await self.transport_context.__aenter__()
+            self.logger.info("Transport context entered, creating session...")
             
             self.session = ClientSession(read_stream, write_stream)
+            self.logger.info("Initializing MCP session...")
             await self.session.initialize()
             
             self.connected = True
