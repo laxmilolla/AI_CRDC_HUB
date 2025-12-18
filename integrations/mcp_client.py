@@ -1,5 +1,5 @@
 """
-MCP Playwright client using Microsoft's official MCP Playwright
+MCP Playwright client using ExecuteAutomation's MCP Playwright server
 """
 import os
 from typing import Optional, Dict, Any
@@ -8,10 +8,10 @@ from utils.logger import get_logger
 
 class MCPPlaywrightClient:
     """
-    Client for Microsoft MCP Playwright
+    Client for ExecuteAutomation MCP Playwright
     
-    This integrates with Microsoft's official MCP Playwright server.
-    The MCP server should be running and accessible.
+    This integrates with @executeautomation/playwright-mcp-server.
+    Uses xvfb-run for headless display support.
     """
     
     def __init__(self, mcp_server_path: str = None):
@@ -39,11 +39,11 @@ class MCPPlaywrightClient:
     
     async def connect_mcp_server(self):
         """
-        Connect to Microsoft MCP Playwright server
+        Connect to ExecuteAutomation MCP Playwright server
         
         The MCP server should be running via:
-        - npx -y @playwright/mcp
-        - Official package: https://github.com/microsoft/playwright-mcp
+        - xvfb-run -a npx @executeautomation/playwright-mcp-server
+        - Package: https://www.npmjs.com/package/@executeautomation/playwright-mcp-server
         """
         if not self.mcp_available:
             raise RuntimeError("MCP SDK not available. Install with: pip install mcp")
@@ -55,12 +55,12 @@ class MCPPlaywrightClient:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
             
-            # Microsoft MCP Playwright server command
-            # Official package: @playwright/mcp
-            # https://github.com/microsoft/playwright-mcp
+            # ExecuteAutomation MCP Playwright server command
+            # Uses xvfb-run for headless display support (like agent_llm instance)
+            # Package: @executeautomation/playwright-mcp-server
             server_params = StdioServerParameters(
-                command="npx",
-                args=["-y", "@playwright/mcp"]
+                command="xvfb-run",
+                args=["-a", "npx", "@executeautomation/playwright-mcp-server"]
             )
             
             # stdio_client returns an async context manager
@@ -79,7 +79,7 @@ class MCPPlaywrightClient:
             await asyncio.wait_for(self.session.initialize(), timeout=10.0)
             
             self.connected = True
-            self.logger.info("Connected to Microsoft MCP Playwright server")
+            self.logger.info("Connected to ExecuteAutomation MCP Playwright server")
             
         except asyncio.TimeoutError:
             error_msg = "MCP server initialization timeout - server may not be responding"

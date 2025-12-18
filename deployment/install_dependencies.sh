@@ -39,12 +39,17 @@ sudo apt install -y \
     libgbm1 \
     libasound2t64 \
     libpango-1.0-0 \
-    libcairo2
+    libcairo2 \
+    xvfb
 
 # Install Playwright browsers
 echo "Step 5: Installing Playwright browsers..."
 sudo npm install -g playwright
 sudo npx playwright install --with-deps chromium
+
+# Install ExecuteAutomation MCP Playwright server
+echo "Step 5a: Installing ExecuteAutomation MCP Playwright server..."
+sudo npm install -g @executeautomation/playwright-mcp-server
 
 # Install AWS CLI (for Bedrock access)
 echo "Step 6: Installing AWS CLI..."
