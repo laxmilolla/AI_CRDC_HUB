@@ -1,0 +1,20 @@
+[Unit]
+Description=AI_CRDC_HUB - AI Test Automation System
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/AI_CRDCHub
+Environment="PATH=/opt/AI_CRDCHub/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/AI_CRDCHub/venv/bin/python /opt/AI_CRDCHub/app.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-crdc-hub
+
+[Install]
+WantedBy=multi-user.target
+
