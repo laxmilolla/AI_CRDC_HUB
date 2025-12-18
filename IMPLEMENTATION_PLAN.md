@@ -379,15 +379,16 @@ Implement LLM-driven result analysis:
 
 Set up Microsoft's official MCP Playwright server:
 
-- Use Microsoft's official MCP Playwright: `@modelcontextprotocol/server-playwright`
-- Install via: `npx @modelcontextprotocol/server-playwright`
+- Use Microsoft's official MCP Playwright: `@playwright/mcp`
+- Install via: `npx -y @playwright/mcp`
+- GitHub: https://github.com/microsoft/playwright-mcp
 - MCP server provides browser control functions: navigate, click, fill, screenshot, get_text, wait_for
 - No custom server needed - use Microsoft's implementation
 
 **Installation:**
 ```bash
-npm install -g @modelcontextprotocol/server-playwright
-# Or use npx: npx @modelcontextprotocol/server-playwright
+npm install -g @playwright/mcp
+# Or use npx: npx -y @playwright/mcp
 ```
 
 **Files to create:**

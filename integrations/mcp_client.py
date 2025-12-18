@@ -40,8 +40,8 @@ class MCPPlaywrightClient:
         Connect to Microsoft MCP Playwright server
         
         The MCP server should be running via:
-        - npx @modelcontextprotocol/server-playwright
-        - Or as a configured MCP server
+        - npx -y @playwright/mcp
+        - Official package: https://github.com/microsoft/playwright-mcp
         """
         if not self.mcp_available:
             raise RuntimeError("MCP SDK not available. Install with: pip install mcp")
@@ -51,10 +51,11 @@ class MCPPlaywrightClient:
             from mcp.client.stdio import stdio_client
             
             # Microsoft MCP Playwright server command
-            # Typically: npx @modelcontextprotocol/server-playwright
+            # Official package: @playwright/mcp
+            # https://github.com/microsoft/playwright-mcp
             server_params = StdioServerParameters(
                 command="npx",
-                args=["@modelcontextprotocol/server-playwright"]
+                args=["-y", "@playwright/mcp"]
             )
             
             stdio_transport = await stdio_client(server_params)

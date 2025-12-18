@@ -49,7 +49,7 @@ npx playwright install --with-deps chromium
 
 ### 6. Install MCP Playwright Server
 ```bash
-npm install -g @modelcontextprotocol/server-playwright
+npm install -g @playwright/mcp
 ```
 
 ### 7. Set Up Systemd Service

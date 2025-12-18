@@ -56,7 +56,7 @@ User Story → LLM (Test Cases) → UI (User Selects) → LLM (Playwright Code) 
 
 4. **Install Microsoft MCP Playwright**
    ```bash
-   npm install -g @modelcontextprotocol/server-playwright
+   npm install -g @playwright/mcp
    ```
 
 5. **Configure environment**
