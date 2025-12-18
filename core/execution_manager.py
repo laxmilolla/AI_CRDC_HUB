@@ -3,11 +3,13 @@ Test execution orchestration and management
 """
 import json
 import time
+import asyncio
 from typing import Dict, Any, Optional
 from pathlib import Path
 from utils.file_handler import FileHandler
 from utils.logger import get_logger
 from utils.screenshot_handler import ScreenshotHandler
+from integrations.mcp_client import MCPPlaywrightClient
 
 
 class ExecutionManager:
