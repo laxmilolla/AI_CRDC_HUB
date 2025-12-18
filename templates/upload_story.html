@@ -98,13 +98,44 @@ async function uploadStory(data) {
         const result = await response.json();
         
         if (response.ok) {
-            // Redirect to test cases page with execution_id
-            window.location.href = `/test-cases?execution_id=${result.execution_id || ''}`;
+            // If execution_id is returned, redirect to test cases
+            // Otherwise, need to generate test cases first
+            if (result.execution_id) {
+                window.location.href = `/test-cases?execution_id=${result.execution_id}`;
+            } else if (result.story_id) {
+                // Generate test cases
+                generateTestCases(result.story_id);
+            } else {
+                showError('Unexpected response format');
+            }
         } else {
             showError(result.error || 'Failed to upload story');
         }
     } catch (error) {
         showError('Error uploading story: ' + error.message);
+    } finally {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+async function generateTestCases(storyId) {
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    loadingIndicator.style.display = 'block';
+    
+    try {
+        const response = await fetch(`/api/stories/${storyId}/generate-test-cases`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            window.location.href = `/test-cases?execution_id=${result.execution_id}`;
+        } else {
+            showError(result.error || 'Failed to generate test cases');
+        }
+    } catch (error) {
+        showError('Error generating test cases: ' + error.message);
     } finally {
         loadingIndicator.style.display = 'none';
     }

@@ -30,6 +30,18 @@ def generate_test_cases(story_id):
         
         logger.info(f"Generated {len(test_cases)} test cases for story {story_id}")
         
+        # Store execution_id for redirect
+        import json
+        from pathlib import Path
+        exec_info = {
+            'story_id': story_id,
+            'execution_id': execution_id,
+            'test_cases_count': len(test_cases)
+        }
+        info_file = Path('data') / 'executions' / f'{execution_id}_info.json'
+        info_file.parent.mkdir(parents=True, exist_ok=True)
+        info_file.write_text(json.dumps(exec_info, indent=2), encoding='utf-8')
+        
         return jsonify({
             'execution_id': execution_id,
             'status': 'ready',
