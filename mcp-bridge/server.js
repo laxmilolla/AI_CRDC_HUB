@@ -22,12 +22,18 @@ app.get('/health', (req, res) => {
 // Connect to MCP server
 app.post('/connect', async (req, res) => {
   try {
+    // If already connected, return success
+    if (mcpBridge.connected) {
+      return res.json({ success: true, message: 'Already connected' });
+    }
+    
     const result = await mcpBridge.connect();
     res.json(result);
   } catch (error) {
+    console.error('[MCP Bridge] Connect endpoint error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message || String(error)
     });
   }
 });
