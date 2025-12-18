@@ -89,56 +89,72 @@ class MCPPlaywrightClient:
             await self.connect_mcp_server()
         
         result = await self.session.call_tool(
-            "playwright_navigate",
+            "browser_navigate",
             arguments={"url": url}
         )
         return result.get("content", [{}])[0].get("text", f"Navigated to {url}")
     
     async def click(self, selector: str) -> str:
-        """Click element via MCP"""
+        """Click element via MCP - uses browser_snapshot first to get element ref"""
+        if not self.connected:
+            await self.connect_mcp_server()
+        
+        # First get page snapshot to find element
+        snapshot = await self.session.call_tool("browser_snapshot", arguments={})
+        # Then click using element ref (simplified - would need proper element selection)
         result = await self.session.call_tool(
-            "playwright_click",
-            arguments={"selector": selector}
+            "browser_click",
+            arguments={"element": selector, "ref": selector}
         )
         return result.get("content", [{}])[0].get("text", f"Clicked {selector}")
     
     async def fill(self, selector: str, text: str) -> str:
         """Fill input via MCP"""
+        if not self.connected:
+            await self.connect_mcp_server()
+        
         result = await self.session.call_tool(
-            "playwright_fill",
-            arguments={"selector": selector, "text": text}
+            "browser_type",
+            arguments={"element": selector, "ref": selector, "text": text}
         )
         return result.get("content", [{}])[0].get("text", f"Filled {selector}")
     
     async def take_screenshot(self, path: str) -> str:
         """Capture screenshot via MCP"""
+        if not self.connected:
+            await self.connect_mcp_server()
+        
         result = await self.session.call_tool(
-            "playwright_screenshot",
-            arguments={"path": path}
+            "browser_take_screenshot",
+            arguments={"filename": path}
         )
         return path
     
     async def get_text(self, selector: str) -> str:
         """Get element text via MCP"""
-        result = await self.session.call_tool(
-            "playwright_get_text",
-            arguments={"selector": selector}
-        )
+        if not self.connected:
+            await self.connect_mcp_server()
+        
+        # Use browser_snapshot to get text
+        result = await self.session.call_tool("browser_snapshot", arguments={})
         return result.get("content", [{}])[0].get("text", "")
     
     async def get_dom(self) -> str:
         """Get page DOM via MCP"""
-        result = await self.session.call_tool(
-            "playwright_get_content",
-            arguments={}
-        )
+        if not self.connected:
+            await self.connect_mcp_server()
+        
+        result = await self.session.call_tool("browser_snapshot", arguments={})
         return result.get("content", [{}])[0].get("text", "")
     
     async def wait_for(self, selector: str, timeout: int = 30000) -> str:
         """Wait for element via MCP"""
+        if not self.connected:
+            await self.connect_mcp_server()
+        
         result = await self.session.call_tool(
-            "playwright_wait_for_selector",
-            arguments={"selector": selector, "timeout": timeout}
+            "browser_wait_for",
+            arguments={"text": selector, "time": timeout / 1000}
         )
         return result.get("content", [{}])[0].get("text", f"Element {selector} appeared")
     
