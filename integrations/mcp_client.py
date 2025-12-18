@@ -57,11 +57,17 @@ class MCPPlaywrightClient:
                 async with session.post(f"{self.bridge_url}/connect", timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
-                        raise RuntimeError(f"MCP bridge connection failed: {error_text}")
+                        raise RuntimeError(f"MCP bridge connection failed (status {resp.status}): {error_text}")
                     
-                    result = await resp.json()
-                    if not result.get('success'):
-                        raise RuntimeError(f"MCP connection failed: {result.get('error', 'Unknown error')}")
+                    try:
+                        result = await resp.json()
+                    except Exception as e:
+                        error_text = await resp.text()
+                        raise RuntimeError(f"Failed to parse bridge response: {e}. Response: {error_text}")
+                    
+                    if not result or not result.get('success'):
+                        error_msg = result.get('error', 'Unknown error') if result else 'No response from bridge'
+                        raise RuntimeError(f"MCP connection failed: {error_msg}")
             
             self.connected = True
             self.logger.info("Connected to ExecuteAutomation MCP Playwright server via bridge")
