@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/opt/AI_CRDC_HUB
-Environment="PATH=/opt/AI_CRDC_HUB/venv/bin"
+Environment="PATH=/opt/AI_CRDC_HUB/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 ExecStart=/opt/AI_CRDC_HUB/venv/bin/python /opt/AI_CRDC_HUB/app.py
 Restart=always
