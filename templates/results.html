@@ -104,10 +104,21 @@ function displayResults(results, summary) {
             <div class="test-result-steps">
                 ${(tr.steps || []).map((step, idx) => `
                     <div class="step-result">
-                        <span class="step-status ${step.status}">${step.status === 'passed' ? '✓' : '✗'}</span>
-                        <span class="step-description">Step ${step.step_number}: ${step.description}</span>
+                        <div class="step-header">
+                            <span class="step-status ${step.status}">${step.status === 'passed' ? '✓' : '✗'}</span>
+                            <span class="step-description">Step ${step.step_number}: ${step.description}</span>
+                            ${step.screenshot ? `
+                                <button class="btn-screenshot" onclick="showScreenshot('${step.screenshot}')" title="View full size">📸</button>
+                            ` : ''}
+                        </div>
                         ${step.screenshot ? `
-                            <button class="btn-screenshot" onclick="showScreenshot('${step.screenshot}')">📸</button>
+                            <div class="step-screenshot">
+                                <img src="${getScreenshotUrl(step.screenshot)}" 
+                                     alt="Step ${step.step_number} screenshot" 
+                                     class="screenshot-thumbnail"
+                                     onclick="showScreenshot('${step.screenshot}')"
+                                     loading="lazy">
+                            </div>
                         ` : ''}
                     </div>
                 `).join('')}
@@ -136,10 +147,29 @@ function displayAnalysis(analysis) {
     `;
 }
 
+function getScreenshotUrl(screenshotPath) {
+    // screenshotPath can be absolute or relative
+    // If absolute, extract relative part; if relative, use as-is
+    let relativePath = screenshotPath;
+    if (screenshotPath.startsWith('/opt/AI_CRDC_HUB/')) {
+        // Extract relative path from absolute path
+        relativePath = screenshotPath.replace('/opt/AI_CRDC_HUB/', '');
+    } else if (screenshotPath.startsWith('/')) {
+        // Absolute path but not our base, try to extract screenshots part
+        const screenshotsIndex = screenshotPath.indexOf('screenshots/');
+        if (screenshotsIndex !== -1) {
+            relativePath = screenshotPath.substring(screenshotsIndex);
+        }
+    }
+    // URL encode the path to handle special characters
+    const encodedPath = encodeURIComponent(relativePath).replace(/%2F/g, '/');
+    return `/api/screenshots/file/${encodedPath}`;
+}
+
 function showScreenshot(screenshotPath) {
     const modal = document.getElementById('screenshotModal');
     const img = document.getElementById('modalImage');
-    img.src = `/api/screenshots/${screenshotPath}`;
+    img.src = getScreenshotUrl(screenshotPath);
     modal.style.display = 'block';
 }
 

@@ -79,7 +79,20 @@ function renderTestCases() {
             <div class="test-case-steps">
                 <strong>Steps:</strong>
                 <ol>
-                    ${(tc.steps || []).map(step => `<li>${step}</li>`).join('')}
+                    ${(tc.steps || []).map((step, idx) => {
+                        // Handle both string and object formats
+                        if (typeof step === 'string') {
+                            return `<li>${step}</li>`;
+                        } else if (typeof step === 'object' && step !== null) {
+                            const desc = step.description || step.step || `Step ${idx + 1}`;
+                            const expected = step.expected_result || step.expected || '';
+                            if (expected) {
+                                return `<li><strong>${desc}</strong><br><em>Verify: ${expected}</em></li>`;
+                            }
+                            return `<li>${desc}</li>`;
+                        }
+                        return `<li>Invalid step format</li>`;
+                    }).join('')}
                 </ol>
             </div>
             <div class="test-case-expected">

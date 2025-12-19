@@ -139,21 +139,48 @@ class ExecutionManager:
                 
                 for step_idx, step_desc in enumerate(steps, 1):
                     try:
+                        # Handle step as string or dict
+                        if isinstance(step_desc, dict):
+                            step_description = step_desc.get('description', step_desc.get('step', ''))
+                            expected_result = step_desc.get('expected_result', step_desc.get('expected', None))
+                        else:
+                            step_description = str(step_desc)
+                            expected_result = None
+                        
+                        # Extract expected result from test case if available
+                        if not expected_result and test_case.get('expected_result'):
+                            expected_result = test_case.get('expected_result')
+                        
                         # Execute step via MCP
                         # Pass playwright_code to help extract selectors
                         step_result = await mcp_client.execute_step(
-                            step_description=step_desc,
+                            step_description=step_description,
                             execution_id=execution_id,
                             test_case_id=test_case_id,
                             step_number=step_idx,
-                            playwright_code=playwright_code
+                            playwright_code=playwright_code,
+                            expected_result=expected_result
                         )
                         step_results.append(step_result)
                         
+                        # Check if step failed (either status or validation)
                         if step_result.get('status') == 'failed':
                             test_status = "failed"
-                            test_error = step_result.get('error')
+                            # Prefer validation message over generic error
+                            test_error = step_result.get('validation_message') or step_result.get('error', 'Step validation failed')
                             break
+                            
+                    except Exception as e:
+                        self.logger.error(f"Error in step {step_idx}: {e}")
+                        step_results.append({
+                            "status": "failed",
+                            "error": str(e),
+                            "step_number": step_idx,
+                            "description": step_description if 'step_description' in locals() else str(step_desc)
+                        })
+                        test_status = "failed"
+                        test_error = str(e)
+                        break
                             
                     except Exception as e:
                         self.logger.error(f"Error in step {step_idx}: {e}")
@@ -197,8 +224,86 @@ class ExecutionManager:
             return results
             
         finally:
-            # Close MCP connection
-            await mcp_client.close()
+            # ALWAYS close MCP connection and cleanup browsers after each run
+            self.logger.info("Starting cleanup after execution...")
+            
+            # Step 1: Close MCP connection (this should close browsers via MCP bridge)
+            try:
+                await mcp_client.close()
+                self.logger.info("MCP connection closed")
+            except Exception as e:
+                self.logger.warning(f"Error closing MCP connection: {e}")
+            
+            # Step 2: Wait a moment for MCP to clean up
+            await asyncio.sleep(2)
+            
+            # Step 3: Force cleanup any hung browser and MCP processes
+            self._cleanup_hung_processes()
+            
+            # Step 4: Wait for processes to terminate
+            await asyncio.sleep(1)
+            
+            # Step 5: Verify cleanup - log remaining processes
+            import subprocess
+            chrome_count = subprocess.run(
+                ["pgrep", "-c", "-f", "chrome|chromium"],
+                capture_output=True,
+                text=True
+            ).stdout.strip() or "0"
+            mcp_count = subprocess.run(
+                ["pgrep", "-c", "-f", "playwright-mcp-server"],
+                capture_output=True,
+                text=True
+            ).stdout.strip() or "0"
+            self.logger.info(f"Cleanup complete. Remaining: {chrome_count} Chrome processes, {mcp_count} MCP servers")
+    
+    def _cleanup_hung_processes(self):
+        """Aggressively cleanup hung browser and MCP processes after each test run"""
+        try:
+            import subprocess
+            
+            self.logger.info("Cleaning up hung processes...")
+            
+            # Kill Chrome/Chromium processes (all instances)
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "chrome|chromium"],
+                timeout=10,
+                capture_output=True,
+                shell=True
+            )
+            if result.returncode == 0:
+                self.logger.info("Killed Chrome/Chromium processes")
+            
+            # Kill MCP server processes (all instances except the bridge service)
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "playwright-mcp-server"],
+                timeout=10,
+                capture_output=True
+            )
+            if result.returncode == 0:
+                self.logger.info("Killed MCP server processes")
+            
+            # Kill npm processes that might be hanging
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "npm exec @executeautomation"],
+                timeout=10,
+                capture_output=True
+            )
+            if result.returncode == 0:
+                self.logger.info("Killed npm processes")
+            
+            # Kill any xvfb processes that might be orphaned
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "xvfb-run"],
+                timeout=10,
+                capture_output=True
+            )
+            
+            self.logger.info("Process cleanup completed")
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
     
     def monitor_execution(self, execution_id: str) -> Dict[str, Any]:
         """

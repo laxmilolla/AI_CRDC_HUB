@@ -8,6 +8,8 @@ User=ubuntu
 WorkingDirectory=/opt/AI_CRDC_HUB/mcp-bridge
 Environment="NODE_ENV=production"
 Environment="MCP_BRIDGE_PORT=3001"
+Environment="PLAYWRIGHT_BROWSERS_PATH=/home/ubuntu/.cache/ms-playwright"
+Environment="PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0"
 ExecStart=/usr/bin/node /opt/AI_CRDC_HUB/mcp-bridge/server.js
 Restart=always
 RestartSec=10

@@ -45,12 +45,16 @@ app.post('/navigate', async (req, res) => {
     if (!url) {
       return res.status(400).json({ error: 'url is required' });
     }
+    console.log(`[MCP Bridge] Navigate endpoint called with URL: ${url}`);
     const result = await mcpBridge.navigate(url);
+    console.log(`[MCP Bridge] Navigate result:`, JSON.stringify(result));
     res.json(result);
   } catch (error) {
+    console.error('[MCP Bridge] Navigate endpoint error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message || String(error),
+      errorStack: error.stack
     });
   }
 });
@@ -92,12 +96,20 @@ app.post('/fill', async (req, res) => {
 // Take screenshot
 app.post('/screenshot', async (req, res) => {
   try {
-    const { path } = req.body;
-    if (!path) {
-      return res.status(400).json({ error: 'path is required' });
+    const { path, name, savePng, fullPage } = req.body;
+    
+    // Support both old (path) and new (name, savePng, fullPage) parameter formats
+    if (path) {
+      // Legacy format: extract name from path
+      const result = await mcpBridge.screenshot(path);
+      res.json(result);
+    } else if (name) {
+      // New format: use name, savePng, fullPage
+      const result = await mcpBridge.screenshotWithOptions({ name, savePng, fullPage });
+      res.json(result);
+    } else {
+      return res.status(400).json({ error: 'Either "path" or "name" is required' });
     }
-    const result = await mcpBridge.screenshot(path);
-    res.json(result);
   } catch (error) {
     res.status(500).json({ 
       success: false, 
@@ -140,6 +152,23 @@ app.post('/wait_for', async (req, res) => {
   }
 });
 
+// Evaluate JavaScript in page context
+app.post('/evaluate', async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ error: 'code is required' });
+    }
+    const result = await mcpBridge.evaluate(code);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Get page snapshot
 app.post('/snapshot', async (req, res) => {
   try {
@@ -160,12 +189,16 @@ app.post('/call_tool', async (req, res) => {
     if (!name) {
       return res.status(400).json({ error: 'tool name is required' });
     }
+    console.log(`[MCP Bridge] Generic tool call endpoint: ${name}`);
     const result = await mcpBridge.callTool(name, args || {});
+    console.log(`[MCP Bridge] Tool call result:`, JSON.stringify(result));
     res.json(result);
   } catch (error) {
+    console.error('[MCP Bridge] Generic tool call endpoint error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message || String(error),
+      errorStack: error.stack
     });
   }
 });
@@ -178,6 +211,28 @@ app.get('/tools', async (req, res) => {
     }
     const tools = mcpBridge.getTools();
     res.json({ success: true, tools: tools.map(t => ({ name: t.name, description: t.description })) });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Get tool schema/details
+app.get('/tools/:toolName', async (req, res) => {
+  try {
+    const { toolName } = req.params;
+    if (!mcpBridge.connected) {
+      await mcpBridge.connect();
+    }
+    const tools = mcpBridge.getTools();
+    const tool = tools.find(t => t.name === toolName);
+    if (tool) {
+      res.json({ success: true, tool: tool });
+    } else {
+      res.status(404).json({ success: false, error: 'Tool not found' });
+    }
   } catch (error) {
     res.status(500).json({ 
       success: false, 

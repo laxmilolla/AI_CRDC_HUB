@@ -329,11 +329,35 @@ textarea {
 }
 
 .step-result {
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.step-header {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.5rem;
-    margin: 0.5rem 0;
+    margin-bottom: 0.5rem;
+}
+
+.step-screenshot {
+    margin-top: 0.5rem;
+    margin-left: 2rem;
+}
+
+.screenshot-thumbnail {
+    max-width: 400px;
+    max-height: 300px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.screenshot-thumbnail:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
 .step-status {

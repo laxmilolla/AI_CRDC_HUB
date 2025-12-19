@@ -15,7 +15,10 @@ logger = get_logger(__name__)
 def list_screenshots(execution_id, test_case_id):
     """List all screenshots for a test case"""
     try:
-        screenshot_handler = ScreenshotHandler(execution_id=execution_id)
+        from utils.file_handler import FileHandler
+        
+        file_handler = FileHandler()
+        screenshot_handler = ScreenshotHandler(base_dir=str(file_handler.base_dir), execution_id=execution_id)
         screenshots = screenshot_handler.list_screenshots(execution_id, test_case_id)
         
         screenshot_info = []
@@ -41,7 +44,10 @@ def list_screenshots(execution_id, test_case_id):
 def get_screenshot(execution_id, test_case_id, step_number):
     """Get specific screenshot image"""
     try:
-        screenshot_handler = ScreenshotHandler(execution_id=execution_id)
+        from utils.file_handler import FileHandler
+        
+        file_handler = FileHandler()
+        screenshot_handler = ScreenshotHandler(base_dir=str(file_handler.base_dir), execution_id=execution_id)
         screenshots = screenshot_handler.list_screenshots(execution_id, test_case_id)
         
         # Find screenshot by step number
@@ -69,15 +75,49 @@ def get_screenshot(execution_id, test_case_id, step_number):
 def serve_screenshot_file(filepath):
     """Serve screenshot file directly by path"""
     try:
-        # Security: ensure path is within screenshots directory
-        screenshot_path = Path('screenshots') / filepath
+        from utils.file_handler import FileHandler
+        from pathlib import Path
         
-        # Prevent directory traversal
-        if not str(screenshot_path.resolve()).startswith(str(Path('screenshots').resolve())):
-            return jsonify({'error': 'Invalid path'}), 403
+        file_handler = FileHandler()
+        
+        # Handle both absolute and relative paths
+        # If it's already an absolute path, use it directly
+        if filepath.startswith('/'):
+            screenshot_path = Path(filepath)
+        elif filepath.startswith('screenshots/'):
+            screenshot_path = file_handler.base_dir / filepath
+        else:
+            screenshot_path = file_handler.base_dir / 'screenshots' / filepath
+        
+        # Resolve to absolute path
+        screenshot_path = screenshot_path.resolve()
+        base_screenshots_dir = (file_handler.base_dir / "screenshots").resolve()
+        
+        # Prevent directory traversal - ensure path is within screenshots directory
+        try:
+            screenshot_path.relative_to(base_screenshots_dir)
+        except ValueError:
+            # If it's an absolute path outside our base, check if it's still a valid screenshot path
+            if not str(screenshot_path).startswith(str(base_screenshots_dir)):
+                logger.error(f"Invalid screenshot path (outside base): {screenshot_path}")
+                return jsonify({'error': 'Invalid path'}), 403
         
         if not screenshot_path.exists():
-            return jsonify({'error': 'Screenshot not found'}), 404
+            logger.error(f"Screenshot not found: {screenshot_path}")
+            # Try to find it with a different approach
+            if 'execution_' in str(screenshot_path):
+                # Extract execution ID and try alternative path
+                parts = str(screenshot_path).split('execution_')
+                if len(parts) > 1:
+                    alt_path = base_screenshots_dir / ('execution_' + parts[1])
+                    if alt_path.exists():
+                        screenshot_path = alt_path
+                    else:
+                        return jsonify({'error': 'Screenshot not found'}), 404
+                else:
+                    return jsonify({'error': 'Screenshot not found'}), 404
+            else:
+                return jsonify({'error': 'Screenshot not found'}), 404
         
         return send_file(
             str(screenshot_path),
@@ -87,6 +127,8 @@ def serve_screenshot_file(filepath):
         
     except Exception as e:
         logger.error(f"Error serving screenshot: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 

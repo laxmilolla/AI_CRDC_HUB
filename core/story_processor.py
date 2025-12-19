@@ -144,4 +144,49 @@ class StoryProcessor:
             criteria = [c.strip() for c in re.split(r'\n[-*•]\s*|\n\d+\.\s*', ac_text) if c.strip()]
         
         return criteria
+    
+    def extract_expected_results(self, step_description: str) -> Optional[str]:
+        """
+        Extract expected result/assertion from step description.
+        Looks for patterns like:
+        - "Verify that..."
+        - "Expected: ..."
+        - "Should see..."
+        - "Assert that..."
+        - "Check that..."
+        
+        Args:
+            step_description: Step description text
+        
+        Returns:
+            Expected result string if found, None otherwise
+        """
+        # Look for explicit verification patterns
+        verify_patterns = [
+            r'Verify\s+that\s+(.+?)(?:\.|$|,|\n)',
+            r'Expected:\s*(.+?)(?:\.|$|,|\n)',
+            r'Should\s+see\s+(.+?)(?:\.|$|,|\n)',
+            r'Assert\s+that\s+(.+?)(?:\.|$|,|\n)',
+            r'Check\s+that\s+(.+?)(?:\.|$|,|\n)',
+            r'Ensure\s+that\s+(.+?)(?:\.|$|,|\n)',
+            r'Confirm\s+that\s+(.+?)(?:\.|$|,|\n)',
+        ]
+        
+        for pattern in verify_patterns:
+            match = re.search(pattern, step_description, re.IGNORECASE)
+            if match:
+                result = match.group(1).strip()
+                # Remove trailing punctuation
+                result = re.sub(r'[.,;:]+$', '', result)
+                if len(result) > 5:  # Filter out very short matches
+                    return result
+        
+        # Look for "Expected Result:" section in multi-line steps
+        expected_section = re.search(r'Expected\s+Result:?\s*(.+?)(?=\n|$)', step_description, re.IGNORECASE)
+        if expected_section:
+            result = expected_section.group(1).strip()
+            if len(result) > 5:
+                return result
+        
+        return None
 
