@@ -2034,17 +2034,61 @@ class MCPPlaywrightClient:
                                 raise
                 else:
                     # Standard click handling
+                    # Check if this is Step 11 (Grant consent button) - needs special wait for URL change
+                    # Detection: Step 11 OR step description contains "grant" AND "consent" OR selector contains "Grant"
+                    is_grant_consent_click = (action == "click" and 
+                                            (step_number == 11 or 
+                                             ("grant" in step_description.lower() and "consent" in step_description.lower()) or
+                                             "grant" in str(selector).lower()))
+                    
                     await self.click(selector)
                     self.logger.info(f"Clicked {selector}")
-                    # Wait for navigation/page changes after click (especially for navigation clicks)
-                    # Check if this might be a navigation click based on step description
-                    if any(keyword in step_description.lower() for keyword in ["sign in", "login", "submit", "next", "navigate", "go to"]):
-                        # Longer wait for navigation clicks to ensure page loads
-                        await asyncio.sleep(3.0)
-                        self.logger.info(f"Waited 3s after click for navigation to complete")
+                    
+                    if is_grant_consent_click:
+                        # CRITICAL: Step 11 (Grant consent) - actively wait for URL to change from consent page to hub
+                        # The redirect to hub-stage.datacommons.cancer.gov may take several seconds
+                        self.logger.info(f"[GRANT_CONSENT] Step {step_number} Clicked Grant button - waiting for URL to change to hub")
+                        
+                        # Actively poll for URL change (up to 20 seconds total)
+                        max_wait_time = 20.0  # Total maximum wait time
+                        check_interval = 1.0  # Check every 1 second
+                        max_checks = int(max_wait_time / check_interval)
+                        redirect_completed = False
+                        
+                        for check_num in range(max_checks):
+                            try:
+                                current_url = await self.evaluate("window.location.href")
+                                self.logger.info(f"[GRANT_CONSENT] Step {step_number} Check {check_num + 1}/{max_checks}: Current URL: {current_url}")
+                                
+                                if "hub-stage.datacommons.cancer.gov" in current_url.lower():
+                                    self.logger.info(f"[GRANT_CONSENT] Step {step_number} ✅ Successfully redirected to hub: {current_url}")
+                                    redirect_completed = True
+                                    break
+                                elif "sts.nih.gov/auth/oauth/v2/authorize/consent" not in current_url.lower():
+                                    # URL changed but not to hub yet - might be intermediate redirect
+                                    self.logger.info(f"[GRANT_CONSENT] Step {step_number} URL changed to: {current_url} (waiting for hub redirect)")
+                            except Exception as url_check_error:
+                                self.logger.warning(f"[GRANT_CONSENT] Step {step_number} Could not check URL (check {check_num + 1}): {url_check_error}")
+                            
+                            if check_num < max_checks - 1:  # Don't wait after last check
+                                await asyncio.sleep(check_interval)
+                        
+                        if not redirect_completed:
+                            try:
+                                final_url = await self.evaluate("window.location.href")
+                                self.logger.warning(f"[GRANT_CONSENT] Step {step_number} ⚠️ Redirect not completed after {max_wait_time}s. Final URL: {final_url}")
+                            except:
+                                pass
                     else:
-                        # Standard wait for other clicks
-                        await asyncio.sleep(1.0)
+                        # Wait for navigation/page changes after click (especially for navigation clicks)
+                        # Check if this might be a navigation click based on step description
+                        if any(keyword in step_description.lower() for keyword in ["sign in", "login", "submit", "next", "navigate", "go to"]):
+                            # Longer wait for navigation clicks to ensure page loads
+                            await asyncio.sleep(3.0)
+                            self.logger.info(f"Waited 3s after click for navigation to complete")
+                        else:
+                            # Standard wait for other clicks
+                            await asyncio.sleep(1.0)
                 
             elif action == "wait_for":
                 selector = parameters.get("selector")
