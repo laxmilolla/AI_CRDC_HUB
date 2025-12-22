@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # Configuration
 EC2_IP="3.221.24.93"
 EC2_USER="ubuntu"
-PROJECT_DIR="/opt/AI_CRDCHub"
+PROJECT_DIR="/opt/AI_CRDC_HUB"
 SSH_KEY="$1"
 
 # Check if SSH key is provided
@@ -72,8 +72,8 @@ echo -e "${GREEN}✓ Files copied${NC}"
 
 # Run setup script on EC2
 echo -e "${YELLOW}Step 4: Running setup script on EC2...${NC}"
-ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << 'ENDSSH'
-cd /opt/AI_CRDCHub
+ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << ENDSSH
+cd $PROJECT_DIR
 chmod +x deployment/install_dependencies.sh
 ./deployment/install_dependencies.sh
 ENDSSH
@@ -82,8 +82,8 @@ echo -e "${GREEN}✓ Setup script completed${NC}"
 
 # Create .env file on EC2
 echo -e "${YELLOW}Step 5: Configuring environment variables...${NC}"
-ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << 'ENDSSH'
-cd /opt/AI_CRDCHub
+ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << ENDSSH
+cd $PROJECT_DIR
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "Created .env file - please edit it with your AWS credentials"
@@ -95,8 +95,8 @@ echo -e "${YELLOW}⚠ IMPORTANT: Edit .env file on EC2 with your AWS credentials
 
 # Install Python dependencies
 echo -e "${YELLOW}Step 6: Installing Python dependencies...${NC}"
-ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << 'ENDSSH'
-cd /opt/AI_CRDCHub
+ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << ENDSSH
+cd $PROJECT_DIR
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -106,8 +106,8 @@ echo -e "${GREEN}✓ Python dependencies installed${NC}"
 
 # Install Playwright browsers
 echo -e "${YELLOW}Step 7: Installing Playwright browsers...${NC}"
-ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << 'ENDSSH'
-cd /opt/AI_CRDCHub
+ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << ENDSSH
+cd $PROJECT_DIR
 npx playwright install --with-deps chromium
 ENDSSH
 
@@ -115,8 +115,8 @@ echo -e "${GREEN}✓ Playwright browsers installed${NC}"
 
 # Set up systemd service
 echo -e "${YELLOW}Step 8: Setting up systemd service...${NC}"
-ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << 'ENDSSH'
-cd /opt/AI_CRDCHub
+ssh -i "$SSH_KEY" "$EC2_USER@$EC2_IP" << ENDSSH
+cd $PROJECT_DIR
 sudo cp deployment/app.service /etc/systemd/system/ai-crdc-hub.service
 sudo systemctl daemon-reload
 sudo systemctl enable ai-crdc-hub
@@ -139,7 +139,7 @@ echo ""
 echo "Next steps:"
 echo "1. Edit .env file on EC2 with your AWS credentials:"
 echo "   ssh -i $SSH_KEY $EC2_USER@$EC2_IP"
-echo "   nano /opt/AI_CRDCHub/.env"
+echo "   nano $PROJECT_DIR/.env"
 echo ""
 echo "2. Start the application:"
 echo "   ssh -i $SSH_KEY $EC2_USER@$EC2_IP"

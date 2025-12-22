@@ -68,11 +68,24 @@ As a user, I want to successfully log in to the Cancer Data Commons Hub using lo
 
 **Step 10: Submit TOTP Code**
 - Action: Click "Submit" button to complete login
-- Expected Result: TOTP code is submitted and user is logged in
+- Expected Result: TOTP code is submitted and user is navigated to 2FA reminder page or NIH Information Sharing Consent page
 - Wait For: "Submit" button to be visible and clickable (timeout: 10 seconds)
-- Validation: User is redirected to the Cancer Data Commons Hub main page (URL contains 'hub-stage.datacommons.cancer.gov')
+- Validation: Page navigates away from TOTP entry page (URL no longer contains 'two_factor/authenticator')
 
-**Step 11: Verify Successful Login**
+**Step 10.5: Handle 2FA Reminder Page (Conditional)**
+- Action: If a page appears asking "Do you want to add another 2FA method?", click "Continue" button
+- Expected Result: Page proceeds to the next step (consent page)
+- Wait For: "Continue" button to be visible and clickable (timeout: 10 seconds), or page to navigate away automatically
+- Validation: If the 2FA reminder page appears (URL contains 'second_mfa_reminder'), click "Continue". If not present, step passes automatically and proceeds to consent page.
+
+**Step 11: Grant Consent (Conditional)**
+- Action: If a consent page appears with "Grant" button, click "Grant" button
+- Expected Result: Consent is granted and user is redirected to the Cancer Data Commons Hub main page
+- Wait For: "Grant" button to be visible and clickable (timeout: 10 seconds), or page to navigate away automatically
+- After Click: Wait for navigation/redirect to complete (timeout: 15 seconds). The page may take a few seconds to redirect after clicking "Grant"
+- Validation: If consent page appears (URL contains 'sts.nih.gov/auth/oauth/v2/authorize/consent'), click "Grant". After clicking, wait for redirect to complete. User is redirected to the Cancer Data Commons Hub main page (URL contains 'hub-stage.datacommons.cancer.gov')
+
+**Step 12: Verify Successful Login**
 - Action: Verify successful login
 - Expected Result: User is logged in and can see the hub's main dashboard/content
 - Wait For: Hub main page to load (timeout: 15 seconds)
@@ -82,11 +95,16 @@ As a user, I want to successfully log in to the Cancer Data Commons Hub using lo
 
 1. **Implicit Waits**: Each step that involves clicking or filling should wait for the target element to be present and visible before performing the action. Use a timeout of 10 seconds for most elements, 15 seconds for page loads.
 
-2. **Conditional Steps**: Step 2 (popup banner) is conditional - if the popup doesn't appear, the step should pass automatically.
+2. **Conditional Steps**: 
+   - Step 2 (popup banner) is conditional - if the popup doesn't appear, the step should pass automatically.
+   - Step 10.5 (2FA reminder page) is conditional - if the page doesn't appear, the step should pass automatically.
+   - Step 11 (Grant consent) is conditional - if the consent page doesn't appear, the step should pass automatically.
 
 3. **Navigation Expectations**: 
    - After Step 4 (Click Log In), expect to be on the login page (auth.nih.gov), NOT the hub. This is correct behavior.
-   - After Step 10 (Submit TOTP), expect to be back on the hub main page.
+   - After Step 10 (Submit TOTP), expect to navigate away from TOTP page. May go to 2FA reminder page (second_mfa_reminder) or directly to consent page.
+   - After Step 10.5 (Handle 2FA Reminder), if the reminder page appeared, expect to be on the NIH Information Sharing Consent page (sts.nih.gov/auth/oauth/v2/authorize/consent).
+   - After Step 11 (Grant Consent), expect to be back on the hub main page (hub-stage.datacommons.cancer.gov). **IMPORTANT**: The redirect after clicking "Grant" may take several seconds. Wait up to 15 seconds for the redirect to complete before validating the URL.
 
 4. **TOTP Generation**: The TOTP code must be generated dynamically using the secret key at the time of Step 9. Do not use a hardcoded code.
 

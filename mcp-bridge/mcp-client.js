@@ -114,6 +114,47 @@ class MCPPlaywrightBridge {
     return await this.callTool('playwright_fill', { selector, text });
   }
 
+  async type(selector, text) {
+    // Use playwright_type if available, otherwise fall back to evaluate-based typing
+    // Check if playwright_type tool exists
+    const hasTypeTool = this.tools?.some(t => t.name === 'playwright_type');
+    
+    console.log(`[MCP Bridge] type() called - hasTypeTool: ${hasTypeTool}`);
+    console.log(`[MCP Bridge] Available tools: ${this.tools?.map(t => t.name).join(', ') || 'none'}`);
+    console.log(`[MCP Bridge] Selector: ${selector}, Text length: ${text?.length || 0}`);
+    
+    if (hasTypeTool) {
+      console.log('[MCP Bridge] Using playwright_type tool');
+      return await this.callTool('playwright_type', { selector, text });
+    } else {
+      console.log('[MCP Bridge] playwright_type tool NOT found, using JavaScript fallback');
+      // Fallback: use evaluate to simulate typing character by character
+      const typeCode = `
+        (async () => {
+          const el = document.querySelector('${selector.replace(/'/g, "\\'")}');
+          if (!el) return { success: false, error: 'Element not found' };
+          
+          el.focus();
+          el.value = '';
+          
+          const text = '${text.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}';
+          for (let i = 0; i < text.length; i++) {
+            el.value += text[i];
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+          
+          return { success: true, value: el.value };
+        })()
+      `;
+      return await this.evaluate(typeCode);
+    }
+  }
+
   async screenshot(path) {
     // The playwright_screenshot tool doesn't accept 'path' parameter
     // It uses 'name' for filename and saves to Downloads by default

@@ -21,6 +21,7 @@ class FileHandler:
             "data/test_cases",
             "data/selections",
             "data/results",
+            "data/selectors",
             "generated_tests",
             "screenshots",
             "reports",

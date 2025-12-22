@@ -59,17 +59,20 @@ if [ -d "$PROJECT_DIR/mcp-bridge" ]; then
     cd $PROJECT_DIR
 fi
 
-# Install AWS CLI (for Bedrock access)
-echo "Step 6: Installing AWS CLI..."
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-sudo apt install -y unzip
-unzip awscliv2.zip
-sudo ./aws/install
-rm -rf aws awscliv2.zip
+# Install AWS CLI (for Bedrock access) - SKIPPED: boto3 is used instead
+# AWS CLI is not needed if using boto3 Python SDK (already in requirements.txt)
+# Uncomment below if AWS CLI is specifically required
+# echo "Step 6: Installing AWS CLI..."
+# curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+# sudo apt install -y unzip
+# unzip awscliv2.zip
+# sudo ./aws/install
+# rm -rf aws awscliv2.zip
+echo "Step 6: Skipping AWS CLI installation (using boto3 Python SDK instead)"
 
 # Create project directory
 echo "Step 7: Creating project directory..."
-PROJECT_DIR="/opt/AI_CRDCHub"
+PROJECT_DIR="/opt/AI_CRDC_HUB"
 sudo mkdir -p $PROJECT_DIR
 sudo chown $USER:$USER $PROJECT_DIR
 

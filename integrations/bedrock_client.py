@@ -5,8 +5,11 @@ import json
 import boto3
 import os
 import time
+import logging
 from typing import Dict, Any, Optional
 from botocore.exceptions import ClientError
+
+logger = logging.getLogger(__name__)
 
 
 class BedrockClient:
@@ -113,64 +116,55 @@ class BedrockClient:
         Returns:
             List of test case dictionaries
         """
-        prompt = f"""You are a QA automation engineer. Given the following user story, generate comprehensive test cases.
+        prompt = f"""Generate comprehensive test cases from this user story. Include ALL required details.
 
 User Story:
 {user_story}
 
-CRITICAL: Preserve ALL verification criteria and expected outcomes from the user story.
-- If the user story includes "Verify" statements, include them in the test case steps
-- If the user story has step-by-step expected results, preserve them for each step
-- If the user story specifies what to check after each step, include that in that step's expected_result
-- If the user story has "Expected Outcomes" or "Validation Points", preserve them
-- Extract verification criteria from phrases like "Verify:", "Expected:", "Should show:", "Should display:"
-- If the user story has format like "Step X: Action → Verify: Outcome", preserve both action and verification
+CRITICAL REQUIREMENTS - DO NOT OMIT:
+1. **URLs**: Include complete URLs (e.g., https://hub-stage.datacommons.cancer.gov/) in step descriptions
+2. **Credentials**: Include usernames, passwords, TOTP secret keys exactly as specified
+3. **Selectors**: Include element selectors/identifiers when mentioned (button text, field names, etc.)
+4. **Wait Requirements**: Include timeout values and wait conditions (e.g., "wait 10s for element")
+5. **Validation Criteria**: Include ALL verification details from "Verify:", "Expected:", "Should show:" phrases
+6. **Conditional Logic**: Preserve conditional steps (e.g., "If popup appears, click Continue")
+7. **Expected Results**: Include specific expected outcomes for each step
 
-Generate test cases in the following JSON format (return ONLY valid JSON, no markdown):
+Step Format Rules:
+- Step description: Include action + all parameters (URLs, credentials, selectors, timeouts)
+- Expected result: Include verification criteria (what to check, expected values, validation conditions)
+- For "Step X: Action → Verify: Outcome": Put Action+params in description, Outcome+validation in expected_result
+
+Generate 3-5 test cases covering:
+- Happy path (primary flow)
+- Key edge cases (if applicable)
+- Critical error scenarios (if applicable)
+
+JSON format (return ONLY valid JSON, no markdown):
 {{
   "test_cases": [
     {{
       "id": "TC001",
-      "name": "Test Case Name",
-      "description": "Detailed description",
+      "name": "Test case name",
+      "description": "Test case description",
       "steps": [
         {{
-          "description": "step1 action",
-          "expected_result": "What to verify after this step (extract from user story if provided)"
-        }},
-        {{
-          "description": "step2 action",
-          "expected_result": "What to verify after this step (extract from user story if provided)"
+          "description": "Action with all details (URL, selector, credentials, timeout if specified)",
+          "expected_result": "Complete verification criteria (what to check, expected values, validation)"
         }}
       ],
-      "expected_result": "Overall expected result for the entire test case",
+      "expected_result": "Overall expected outcome",
       "priority": "High|Medium|Low"
     }}
   ]
 }}
 
-For steps:
-- If the user story has "Verify" or "Expected" after a step, include it in that step's expected_result field
-- If the user story says "Step X: Action → Verify: Outcome", split it: put "Action" in description and "Outcome" in expected_result
-- If a step description contains "Verify that..." or "Expected:", extract the verification part to expected_result and keep only the action in description
-- If the user story has "Validation Points" or "Expected Outcomes" sections, map them to the appropriate steps' expected_result field
-- Preserve all validation criteria and expected outcomes from the user story - DO NOT simplify or remove them
-- IMPORTANT: Keep step descriptions as actions (e.g., "Click Sign In button"), and move verification criteria to expected_result (e.g., "Login page appears with email input field")
-
-Generate comprehensive test cases covering:
-- Happy path scenarios
-- Edge cases
-- Error handling
-- Validation scenarios
-
-Return ONLY the JSON object, no additional text.
-
-⚠️ CRITICAL JSON FORMATTING RULES:
-- Escape all special characters in strings: use \\n for newlines, \\" for quotes, \\\\ for backslashes
-- Do NOT include unescaped quotes, newlines, or special characters in string values
-- If a step description contains quotes, escape them: "Click \"Sign In\" button" → "Click \\"Sign In\\" button"
-- Ensure all strings are properly quoted and escaped
-- Test your JSON is valid before returning it"""
+IMPORTANT:
+- Preserve ALL URLs, credentials, selectors, timeouts, and validation details from user story
+- Keep descriptions clear and complete (not overly verbose, but include all necessary info)
+- Ensure expected_result includes specific verification criteria
+- Escape special chars in JSON: \\n, \\", \\\\
+- Return ONLY valid JSON, no markdown code blocks"""
 
         response = self.invoke_model(prompt, max_tokens=4000)
         
@@ -377,20 +371,134 @@ Return ONLY the JSON object, no additional text."""
         step_description: str,
         playwright_code: Optional[str] = None,
         dom_snapshot: Optional[str] = None,
-        expected_result: Optional[str] = None
+        expected_result: Optional[str] = None,
+        current_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Interpret a test step description using LLM to determine the action, parameters, and validation criteria
+        First checks selector registry for known selectors before using LLM
         
         Args:
             step_description: Natural language step description
             playwright_code: Optional generated Playwright code for context
             dom_snapshot: Optional current page DOM snapshot for element finding
             expected_result: Optional expected result/assertion from user story
+            current_url: Optional current page URL for selector registry lookup
         
         Returns:
             Dictionary with action type, parameters, and validation criteria
         """
+        # Check selector registry first (if URL provided and action is fill/click)
+        logger.info(f"Registry check: current_url='{current_url}', step='{step_description[:60]}...'")
+        if current_url and current_url.strip():
+            try:
+                from core.selector_registry import SelectorRegistry
+                registry = SelectorRegistry()
+                
+                # Determine action type from step description
+                step_lower = step_description.lower()
+                action_type = None
+                if any(kw in step_lower for kw in ["navigate", "go to", "open", "visit"]):
+                    action_type = "navigate"
+                elif any(kw in step_lower for kw in ["click", "press", "select"]):
+                    action_type = "click"
+                elif any(kw in step_lower for kw in ["enter", "type", "fill", "input"]):
+                    action_type = "fill"
+                
+                logger.info(f"Registry check: action_type='{action_type}' for step: '{step_description[:60]}...'")
+                
+                # If it's a fill or click action, try to get element type and lookup selector
+                if action_type in ["fill", "click"]:
+                    element_type = registry.get_element_type_from_step(step_description, action_type)
+                    logger.info(f"Registry check: element_type='{element_type}' for action_type='{action_type}'")
+                    if element_type:
+                        logger.info(f"Registry lookup: Checking for element_type '{element_type}' with URL '{current_url}'")
+                        cached_selector = registry.lookup_selector(
+                            current_url,
+                            step_description,
+                            element_type,
+                            action_type
+                        )
+                        if cached_selector:
+                            logger.info(f"Registry lookup SUCCESS: Found cached selector '{cached_selector}' for '{element_type}'")
+                            # Found selector in registry - use it directly
+                            parameters = {"selector": cached_selector}
+                            
+                            # Extract text for fill actions
+                            if action_type == "fill":
+                                # Try to extract text from step description
+                                import re
+                                text_extracted = False
+                                
+                                # Pattern 1: "Enter username: value" or "Type password: value"
+                                text_match = re.search(r'(?:enter|type|fill|input).*?:\s*([^\n]+?)(?:\s+Expected|\s+Verify|$)', step_description, re.IGNORECASE)
+                                if text_match:
+                                    text_value = text_match.group(1).strip()
+                                    # Remove trailing punctuation if it's part of the description
+                                    text_value = re.sub(r'[.,;:]$', '', text_value)
+                                    if text_value:
+                                        parameters["text"] = text_value
+                                        text_extracted = True
+                                
+                                # Pattern 2: Look for email pattern
+                                if not text_extracted:
+                                    email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', step_description)
+                                    if email_match:
+                                        parameters["text"] = email_match.group(0)
+                                        text_extracted = True
+                                
+                                # Pattern 3: Look for quoted strings
+                                if not text_extracted:
+                                    quoted_match = re.search(r'["\']([^"\']+)["\']', step_description)
+                                    if quoted_match:
+                                        parameters["text"] = quoted_match.group(1)
+                                        text_extracted = True
+                                
+                            # Return cached selector if we have all required parameters
+                            # For fill: need both selector and text
+                            # For click: only need selector
+                            if action_type == "fill":
+                                if "text" in parameters:
+                                    # Have both selector and text - use cached selector
+                                    return {
+                                        "action": action_type,
+                                        "parameters": parameters,
+                                        "validation": {
+                                            "type": "inferred",
+                                            "assertions": [],
+                                            "timeout": 5000
+                                        },
+                                        "reasoning": f"Used cached selector from registry: {cached_selector}",
+                                        "from_registry": True
+                                    }
+                                # Text not extracted - let LLM handle it (will use cached selector if provided in context)
+                                # Add cached selector hint to DOM snapshot for LLM to use
+                                if dom_snapshot:
+                                    dom_snapshot = f"CACHED_SELECTOR_HINT: Use selector '{cached_selector}' for this element.\n\n{dom_snapshot}"
+                                else:
+                                    dom_snapshot = f"CACHED_SELECTOR_HINT: Use selector '{cached_selector}' for this element."
+                            elif action_type == "click":
+                                # Click only needs selector - use cached selector
+                                return {
+                                    "action": action_type,
+                                    "parameters": parameters,
+                                    "validation": {
+                                        "type": "inferred",
+                                        "assertions": [],
+                                        "timeout": 5000
+                                    },
+                                    "reasoning": f"Used cached selector from registry: {cached_selector}",
+                                    "from_registry": True
+                                }
+                            # If we get here for fill without text, continue to LLM with selector hint
+                        else:
+                            logger.debug(f"Registry lookup: No cached selector found for element_type '{element_type}'")
+                    else:
+                        logger.debug(f"Registry lookup: Could not infer element_type from step: '{step_description[:50]}...'")
+            except Exception as registry_error:
+                # Registry lookup failed - log and continue with LLM interpretation
+                logger.debug(f"Selector registry lookup failed: {registry_error}. Continuing with LLM interpretation.")
+        
         # Build context string
         context_parts = []
         

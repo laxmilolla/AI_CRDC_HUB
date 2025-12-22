@@ -93,6 +93,23 @@ app.post('/fill', async (req, res) => {
   }
 });
 
+// Type text character by character (for problematic input fields)
+app.post('/type', async (req, res) => {
+  try {
+    const { selector, text } = req.body;
+    if (!selector || !text) {
+      return res.status(400).json({ error: 'selector and text are required' });
+    }
+    const result = await mcpBridge.type(selector, text);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Take screenshot
 app.post('/screenshot', async (req, res) => {
   try {
